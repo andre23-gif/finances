@@ -15,257 +15,156 @@ const PAYMENTS = [
   { value: 'check', label: '🧾 Chèque' }
 ];
 
-const TYPES_ALL = [
-  { value: 'DEPENSE', label: 'Dépense' },
-  { value: 'ENTREE', label: 'Recette' },
-  { value: 'SALAIRE', label: 'Salaire' }
-];
-
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function el(tag, attrs = {}, html = '') {
+function el(tag, attrs = {}, text = '') {
   const n = document.createElement(tag);
-  Object.entries(attrs).forEach(([k, v]) => {
+  for (const [k, v] of Object.entries(attrs)) {
     if (k === 'class') n.className = v;
-    else if (k === 'hidden') n.hidden = !!v;
     else n.setAttribute(k, v);
-  });
-  if (html) n.innerHTML = html;
+  }
+  if (text) n.textContent = text;
   return n;
 }
 
 function select(options, value) {
   const s = el('select');
-  options.forEach(o => {
-    const opt = el('option', { value: o.value });
-    opt.textContent = o.label;
-    s.appendChild(opt);
-  });
+  options.forEach(o => s.appendChild(el('option', { value: o.value }, o.label)));
   if (value) s.value = value;
   return s;
 }
 
-function numberInput(placeholder) {
-  const i = el('input', { type: 'number', step: '0.01', placeholder });
+function input(type, placeholder, extra = {}) {
+  const i = el('input', { type, placeholder, ...extra });
   return i;
 }
 
-function textInput(placeholder) {
-  return el('input', { type: 'text', placeholder });
-}
-
-function dateInput() {
-  const i = el('input', { type: 'date' });
-  i.value = todayISO();
-  return i;
-}
-
-function buildTable(mode) {
-  // mode: depenses | recettes | tous
-  const wrap = el('div', { class: 'table-wrap' });
-
+function buildTable(container, kind) {
   const table = el('table', { class: 'data-table' });
   const thead = el('thead');
   const trh = el('tr');
-
-  const cols = [
-    'Date',
-    'Compte',
-    (mode === 'tous' ? 'Type' : ''),
-    'Montant',
-    'Famille',
-    'Précision',
-    'Paiement',
-    ''
-  ].filter(Boolean);
-
-  cols.forEach(c => trh.appendChild(el('th', {}, c)));
+  ['Date', 'Compte', 'Montant', 'Famille', 'Précision', 'Paiement', ''].forEach(h => trh.appendChild(el('th', {}, h)));
   thead.appendChild(trh);
-
   const tbody = el('tbody');
   table.appendChild(thead);
   table.appendChild(tbody);
+  container.innerHTML = '';
+  container.appendChild(table);
 
-  wrap.appendChild(table);
-
-  return { wrap, tbody };
+  addRow(tbody, kind);
+  return tbody;
 }
 
-function addRow(tbody, mode) {
+function addRow(tbody, kind) {
   const tr = el('tr');
+  tr.classList.add(kind === 'expense' ? 'row-neg' : 'row-pos');
 
-  const tdDate = el('td');  const iDate = dateInput(); tdDate.appendChild(iDate);
-  const tdAcc = el('td');   const sAcc = select(ACCOUNTS, 'perso'); tdAcc.appendChild(sAcc);
+  const tdDate = el('td');
+  const iDate = input('date', '');
+  iDate.value = todayISO();
+  tdDate.appendChild(iDate);
 
-  let tdType = null;
-  let sType = null;
+  const tdAcc = el('td');
+  const sAcc = select(ACCOUNTS, 'perso');
+  tdAcc.appendChild(sAcc);
 
-  if (mode === 'tous') {
-    tdType = el('td');
-    sType = select(TYPES_ALL, 'DEPENSE');
-    tdType.appendChild(sType);
-  }
+  const tdAmt = el('td');
+  const iAmt = input('number', '0.00', { step: '0.01' });
+  tdAmt.appendChild(iAmt);
 
-  const tdAmt = el('td');   const iAmt = numberInput('0.00'); tdAmt.appendChild(iAmt);
-  const tdCat = el('td');   const iCat = textInput('Famille'); tdCat.appendChild(iCat);
-  const tdLab = el('td');   const iLab = textInput('Précision'); tdLab.appendChild(iLab);
-  const tdPay = el('td');   const sPay = select(PAYMENTS, 'card'); tdPay.appendChild(sPay);
+  const tdCat = el('td');
+  const iCat = input('text', 'Famille');
+  tdCat.appendChild(iCat);
+
+  const tdLab = el('td');
+  const iLab = input('text', 'Précision');
+  tdLab.appendChild(iLab);
+
+  const tdPay = el('td');
+  const sPay = select(PAYMENTS, 'card');
+  tdPay.appendChild(sPay);
 
   const tdDel = el('td');
-  const btnDel = el('button', { class: 'icon-btn', type: 'button', title: 'Supprimer' }, '✕');
-  btnDel.addEventListener('click', () => tr.remove());
-  tdDel.appendChild(btnDel);
+  const delBtn = el('button', { class: 'icon-btn', type: 'button', title: 'Supprimer' }, '✕');
+  delBtn.addEventListener('click', () => tr.remove());
+  tdDel.appendChild(delBtn);
 
   tr.appendChild(tdDate);
   tr.appendChild(tdAcc);
-  if (tdType) tr.appendChild(tdType);
   tr.appendChild(tdAmt);
   tr.appendChild(tdCat);
   tr.appendChild(tdLab);
   tr.appendChild(tdPay);
   tr.appendChild(tdDel);
 
-  // petit hint visuel sur montant
-  iAmt.addEventListener('input', () => {
-    const v = Number(iAmt.value || 0);
-    tr.classList.remove('row-neg', 'row-pos');
-    if (!v) return;
-    if (mode === 'depenses') tr.classList.add('row-neg');
-    if (mode === 'recettes') tr.classList.add('row-pos');
-    if (mode === 'tous') {
-      const t = sType?.value;
-      if (t === 'DEPENSE') tr.classList.add('row-neg');
-      else tr.classList.add('row-pos'); // ENTREE ou SALAIRE
-    }
-  });
-
   tbody.appendChild(tr);
 }
 
-function readRows(tbody, mode) {
+function readRows(tbody, kind) {
   const rows = Array.from(tbody.querySelectorAll('tr'));
-  const movements = [];
+  const result = [];
 
   for (const tr of rows) {
-    const inputs = tr.querySelectorAll('input, select');
-    // ordre selon mode
-    // depenses/recettes : date, account, amount, category, label, payment
-    // tous : date, account, type, amount, category, label, payment
-    const values = Array.from(inputs).map(x => x.value);
+    const fields = Array.from(tr.querySelectorAll('input, select')).map(x => x.value);
+    const [date, account, amountRaw, category, label, paymentMethod] = fields;
 
-    if (mode === 'tous') {
-      const [date, account, type, amountRaw, category, label, paymentMethod] = values;
-      const amountNum = Number(amountRaw);
-      if (!date || !account || !type || !amountNum) continue;
+    const amountNum = Number(amountRaw);
+    if (!date || !account || !amountNum) continue;
 
-      const amount = (type === 'DEPENSE') ? -Math.abs(amountNum) : Math.abs(amountNum);
+    const cat = (category || '').trim();
+    const lab = (label || '').trim();
 
-      movements.push({
-        account,
-        date,
-        type,
-        amount,
-        status: 'SAISIE_MANUELLE',
-        category: (category || '').trim(),
-        label: (label || '').trim(),
-        paymentMethod
-      });
-    } else {
-      const [date, account, amountRaw, category, label, paymentMethod] = values;
-      const amountNum = Number(amountRaw);
-      if (!date || !account || !amountNum) continue;
+    let type = (kind === 'expense') ? 'DEPENSE' : 'ENTREE';
+    if (kind === 'income' && cat.toLowerCase() === 'salaire') type = 'SALAIRE';
 
-      const type = (mode === 'depenses') ? 'DEPENSE' : 'ENTREE';
-      const amount = (mode === 'depenses') ? -Math.abs(amountNum) : Math.abs(amountNum);
+    const amount = (type === 'DEPENSE') ? -Math.abs(amountNum) : Math.abs(amountNum);
 
-      movements.push({
-        account,
-        date,
-        type,
-        amount,
-        status: 'SAISIE_MANUELLE',
-        category: (category || '').trim(),
-        label: (label || '').trim(),
-        paymentMethod
-      });
-    }
+    result.push({
+      account,
+      date,
+      amount,
+      type,
+      status: 'SAISIE_MANUELLE',
+      category: cat,
+      label: lab,
+      paymentMethod
+    });
   }
 
-  return movements;
+  return result;
 }
 
 export function initSaisieUI() {
-  const depPanel = document.querySelector('[data-panel="depenses"]');
-  const recPanel = document.querySelector('[data-panel="recettes"]');
-  const allPanel = document.querySelector('[data-panel="tous"]');
+  const page = document.querySelector('.page[data-page="saisie"]');
+  if (!page) return;
 
-  if (!depPanel || !recPanel || !allPanel) return;
+  const expContainer = page.querySelector('[data-expenses]');
+  const incContainer = page.querySelector('[data-incomes]');
+  if (!expContainer || !incContainer) return;
 
-  // construire 3 tableaux
-  const dep = buildTable('depenses');
-  const rec = buildTable('recettes');
-  const all = buildTable('tous');
+  const expBody = buildTable(expContainer, 'expense');
+  const incBody = buildTable(incContainer, 'income');
 
-  depPanel.appendChild(dep.wrap);
-  recPanel.appendChild(rec.wrap);
-  allPanel.appendChild(all.wrap);
+  page.querySelector('[data-add-expense]')?.addEventListener('click', () => addRow(expBody, 'expense'));
+  page.querySelector('[data-add-income]')?.addEventListener('click', () => addRow(incBody, 'income'));
 
-  // lignes initiales
-  addRow(dep.tbody, 'depenses');
-  addRow(rec.tbody, 'recettes');
-  addRow(all.tbody, 'tous');
-
-  // gestion onglets
-  const tabs = document.querySelectorAll('.tab[data-tab]');
-  const panels = {
-    depenses: depPanel,
-    recettes: recPanel,
-    tous: allPanel
-  };
-
-  let active = 'depenses';
-
-  tabs.forEach(t => {
-    t.addEventListener('click', () => {
-      const target = t.dataset.tab;
-      if (!panels[target]) return;
-
-      tabs.forEach(x => x.classList.toggle('active', x === t));
-      Object.entries(panels).forEach(([k, p]) => p.hidden = (k !== target));
-      active = target;
-    });
-  });
-
-  // boutons actions
-  const btnAdd = document.querySelector('[data-add-row]');
-  const btnSave = document.querySelector('[data-save]');
-
-  btnAdd?.addEventListener('click', () => {
-    if (active === 'depenses') addRow(dep.tbody, 'depenses');
-    else if (active === 'recettes') addRow(rec.tbody, 'recettes');
-    else addRow(all.tbody, 'tous');
-  });
-
-  btnSave?.addEventListener('click', async () => {
-    const allMovs = [
-      ...readRows(dep.tbody, 'depenses'),
-      ...readRows(rec.tbody, 'recettes'),
-      ...readRows(all.tbody, 'tous')
+  page.querySelector('[data-save-all]')?.addEventListener('click', async () => {
+    const movements = [
+      ...readRows(expBody, 'expense'),
+      ...readRows(incBody, 'income')
     ];
+    if (movements.length === 0) return;
 
-    if (allMovs.length === 0) return;
-
-    for (const m of allMovs) {
-      // le moteur gère le cas SALAIRE -> déclenche récurrents (mois suivant)
+    for (const m of movements) {
       await addMovementWithTriggers(m);
     }
 
     // reset
-    dep.tbody.innerHTML = ''; rec.tbody.innerHTML = ''; all.tbody.innerHTML = '';
-    addRow(dep.tbody, 'depenses');
-    addRow(rec.tbody, 'recettes');
-    addRow(all.tbody, 'tous');
+    expBody.innerHTML = '';
+    incBody.innerHTML = '';
+    addRow(expBody, 'expense');
+    addRow(incBody, 'income');
   });
 }
