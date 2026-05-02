@@ -1,25 +1,196 @@
-const DEFAULT = 'etat';
+/* ==================================================
+   RESET & BASE
+   ================================================== */
 
-function show(route) {
-  document.querySelectorAll('.page').forEach(p => {
-    p.hidden = p.dataset.page !== route;
-  });
-
-  document.querySelectorAll('.nav-item').forEach(b => {
-    b.classList.toggle('active', b.dataset.route === route);
-  });
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
-export function initRouter() {
-  const route = location.hash.replace('#', '') || DEFAULT;
-  show(route);
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #0f0f0f;
+  color: #e0e0e0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
 
-  window.addEventListener('hashchange', () =>
-    show(location.hash.replace('#', '') || DEFAULT)
-  );
+/* ==================================================
+   HEADER
+   ================================================== */
 
-  document.querySelector('.nav').addEventListener('click', e => {
-    const btn = e.target.closest('.nav-item');
-    if (btn) location.hash = btn.dataset.route;
-  });
+.header {
+  padding: 1rem;
+  text-align: center;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+/* ==================================================
+   NAVIGATION
+   ================================================== */
+
+.nav {
+  display: flex;
+  justify-content: space-around;
+  background: #121212;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.nav-item {
+  background: none;
+  border: none;
+  color: #bdbdbd;
+  padding: 0.75rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.nav-item.active {
+  color: #3a8f3a;
+  border-bottom: 2px solid #3a8f3a;
+}
+
+/* ==================================================
+   LAYOUT
+   ================================================== */
+
+#app {
+  padding: 1rem;
+}
+
+.page {
+  padding-bottom: 2rem;
+}
+
+.page[hidden] {
+  display: none;
+}
+
+h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  color: #bdbdbd;
+}
+
+/* ==================================================
+   COMPTES (ÉTAT)
+   ================================================== */
+
+.accounts {
+  display: grid;
+  gap: 1rem;
+}
+
+.account-card {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.account-card h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  color: #bdbdbd;
+}
+
+.account-card div[data-account] {
+  font-size: 0.95rem;
+}
+
+/* accents couleur par compte */
+.accent-perso   { border-left: 4px solid #2e7d32; }
+.accent-internet{ border-left: 4px solid #388e3c; }
+.accent-commun  { border-left: 4px solid #43a047; }
+.accent-cash    { border-left: 4px solid #bdbdbd; }
+
+/* ==================================================
+   SAISIE / RÉCURRENT / STATS / ARCHIVES
+   ================================================== */
+
+[data-table],
+[data-recurrent],
+[data-stats],
+[data-archives] {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* ==================================================
+   BOUTONS GÉNÉRIQUES
+   ================================================== */
+
+button {
+  font-family: inherit;
+}
+
+.btn-primary {
+  background: #2e7d32;
+  color: #ffffff;
+  border: none;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: #3a8f3a;
+}
+
+.btn-secondary {
+  background: #222;
+  color: #bdbdbd;
+  border: 1px solid #2a2a2a;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background: #2a2a2a;
+}
+
+/* ==================================================
+   FORMULAIRES
+   ================================================== */
+
+input,
+select {
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  padding: 0.45rem;
+  color: #e0e0e0;
+  font-size: 0.85rem;
+}
+
+/* ==================================================
+   ARCHIVES / TEXTE SECONDAIRE
+   ================================================== */
+
+.muted {
+  color: #9e9e9e;
+  font-size: 0.85rem;
+}
+
+/* ==================================================
+   FOOTER
+   ================================================== */
+
+.footer {
+  text-align: center;
+  padding: 0.75rem;
+  font-size: 0.75rem;
+  color: #9e9e9e;
+  border-top: 1px solid #2a2a2a;
 }
