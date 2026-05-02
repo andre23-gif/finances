@@ -1,1 +1,51 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Suivi Financier</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f0f0f">
+  <link rel="stylesheet" href="./style.css">
+  <link rel="manifest" href="./manifest.json">
+</head>
 
+<body>
+  <header class="header">
+    <h1>Suivi Financier</h1>
+  </header>
+
+  <nav class="nav">
+    <button class="nav-item active" data-route="etat">État</button>
+    <button class="nav-item" data-route="saisie">Saisie</button>
+    <button class="nav-item" data-route="recurrent">Récurrent</button>
+    <button class="nav-item" data-route="stats">Stats</button>
+    <button class="nav-item" data-route="archives">Archives</button>
+  </nav>
+
+  <main id="app">
+    <section class="page" data-page="etat">
+      <h2>État des comptes</h2>
+      <div class="accounts">
+        <div class="account-card accent-perso"><h3>Compte perso</h3><div data-account="perso"></div></div>
+        <div class="account-card accent-internet"><h3>Compte internet</h3><div data-account="internet"></div></div>
+        <div class="account-card accent-commun"><h3>Compte commun</h3><div data-account="commun"></div></div>
+        <div class="account-card accent-cash"><h3>Compte cash</h3><div data-account="cash"></div></div>
+      </div>
+    </section>
+
+    <section class="page" data-page="saisie"><h2>Entrées / sorties</h2><div data-table="perso"></div><div data-table="internet"></div><div data-table="commun"></div><div data-table="cash"></div></section>
+    <section class="page" data-page="recurrent"><h2>Dépenses mensuelles</h2><div data-recurrent></div></section>
+    <section class="page" data-page="stats"><h2>Statistiques</h2><div data-stats></div></section>
+    <section class="page" data-page="archives"><h2>Archives</h2><div data-archives></div></section>
+  </main>
+
+  <footer class="footer">Données locales – Hors connexion</footer>
+
+  <script src="./app.js" type="module"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js');
+    }
+  </script>
+</body>
+</html>
