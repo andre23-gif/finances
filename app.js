@@ -1,6 +1,6 @@
 // app.js
 import { initRouter } from './router.js';
-import { openDB-recurrent.js';import { openDB } from './db.js';
+import { openDB } from './db.js';
 import { initStatsUI } from './ui-stats.js';
 import { initArchivesUI } from './ui-archives.js';
 import { updateEtatUI } from './ui-etat.js';
