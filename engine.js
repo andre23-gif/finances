@@ -1,13 +1,60 @@
 // engine.js
 import { add, put, all, STORES } from './db.js';
 
-// uid défini UNE fois (pas dans la boucle)
-const uid = () =>
-  (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+/** ID unique */
+function uid() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return String(Date.now()) + '-' + Math.random().toString(16).slice(2);
+}
 
-// ✅ Tout ce qui utilise "await" + "continue" va dans une fonction async
+/** "YYYY-MM-DD" -> "YYYY-MM" */
+function monthFromDate(dateStr) {
+  return String(dateStr).slice(0, 7);
+}
+
+/** "YYYY-MM" -> mois suivant "YYYY-MM" */
+function nextMonth(yyyyMm) {
+  const [y, m] = yyyyMm.split('-').map(Number); // m = 1..12
+  const d = new Date(y, m, 1); // mois suivant
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function clampDay(year, month1to12, day) {
+  const last = new Date(year, month1to12, 0).getDate();
+  return Math.max(1, Math.min(day, last));
+}
+
+/** "YYYY-MM" + day -> "YYYY-MM-DD" (jour clampé) */
+function dateFromFinancialMonth(financialMonth, day) {
+  const [y, m] = financialMonth.split('-').map(Number);
+  const dd = clampDay(y, m, Number(day));
+  return `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+}
+
+async function isApplied(financialMonth) {
+  const flags = await all(STORES.FLAGS);
+  return flags.some(f => f.financialMonth === financialMonth && f.recurrentsApplied);
+}
+
+async function markApplied(financialMonth, triggeredByMovementId) {
+  // keyPath = financialMonth => put = upsert
+  return put(STORES.FLAGS, {
+    financialMonth,
+    recurrentsApplied: true,
+    triggeredByMovementId,
+    appliedAt: new Date().toISOString()
+  });
+}
+
+/**
+ * Applique les templates récurrents (une seule fois par mois budgétaire).
+ * NOTE: amount dans template est attendu négatif (dépense).
+ */
 async function applyRecurring(financialMonth, triggeredByMovementId) {
-  // templates doit être défini ici (sinon il n’existe pas)
+  if (await isApplied(financialMonth)) return;
+
   const templates = await all(STORES.RECURRING);
 
   for (const t of templates) {
@@ -39,7 +86,6 @@ async function applyRecurring(financialMonth, triggeredByMovementId) {
 
   await markApplied(financialMonth, triggeredByMovementId);
 }
-``
 
 /**
  * Ajout d’un mouvement + déclencheurs
@@ -75,41 +121,4 @@ export async function addMovementWithTriggers(m) {
   }
 
   return movement;
-}
-  (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
-
-function monthFromDate(dateStr) {
-  return String(dateStr).slice(0, 7); // YYYY-MM
-}
-
-function nextMonth(yyyyMm) {
-  const [y, m] = yyyyMm.split('-').map(Number); // m=1..12
-  const d = new Date(y, m, 1); // mois suivant
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function clampDay(year, month1to12, day) {
-  const last = new Date(year, month1to12, 0).getDate();
-  return Math.max(1, Math.min(day, last));
-}
-
-function dateFromFinancialMonth(financialMonth, day) {
-  const [y, m] = financialMonth.split('-').map(Number);
-  const dd = clampDay(y, m, day);
-  return `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
-}
-
-async function isApplied(financialMonth) {
-  const flags = await all(STORES.FLAGS);
-  return flags.some(f => f.financialMonth === financialMonth && f.recurrentsApplied);
-}
-
-async function markApplied(financialMonth, triggeredByMovementId) {
-  // keyPath=financialMonth => put = upsert
-  return put(STORES.FLAGS, {
-    financialMonth,
-    recurrentsApplied: true,
-    triggeredByMovementId,
-    appliedAt: new Date().toISOString()
-  });
 }
