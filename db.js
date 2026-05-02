@@ -1,4 +1,5 @@
-// db.js (version stable)
+// db.js — contrat stable pour toute l’app (IndexedDB)
+
 const DB_NAME = 'suivi-financier';
 const DB_VERSION = 1;
 
@@ -19,7 +20,7 @@ export function openDB() {
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
 
-      // movements
+      // Store: movements
       if (!db.objectStoreNames.contains(STORES.MOVEMENTS)) {
         const s = db.createObjectStore(STORES.MOVEMENTS, { keyPath: 'id' });
         s.createIndex('financialMonth', 'financialMonth', { unique: false });
@@ -27,14 +28,14 @@ export function openDB() {
         s.createIndex('type', 'type', { unique: false });
       }
 
-      // recurring (templates)
+      // Store: recurring (templates)
       if (!db.objectStoreNames.contains(STORES.RECURRING)) {
         const s = db.createObjectStore(STORES.RECURRING, { keyPath: 'id' });
         s.createIndex('active', 'active', { unique: false });
         s.createIndex('account', 'account', { unique: false });
       }
 
-      // flags (anti-doublon par mois budgétaire)
+      // Store: flags (anti-doublon par mois budgétaire)
       if (!db.objectStoreNames.contains(STORES.FLAGS)) {
         db.createObjectStore(STORES.FLAGS, { keyPath: 'financialMonth' });
       }
@@ -47,9 +48,9 @@ export function openDB() {
   return dbPromise;
 }
 
-async function getStore(name, mode = 'readonly') {
+async function getStore(storeName, mode = 'readonly') {
   const db = await openDB();
-  return db.transaction(name, mode).objectStore(name);
+  return db.transaction(storeName, mode).objectStore(storeName);
 }
 
 export async function add(storeName, value) {
