@@ -1,5 +1,5 @@
 // ui-stats.js
-import { getAllMovements } from './db.js';
+import { all } from './db.js';
 
 function formatEUR(value) {
   return value.toLocaleString('fr-FR', {
