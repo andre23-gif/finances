@@ -1,22 +1,7 @@
 // ui-recurrent.js
-import { add, all } from './db.js';
+import { addItem, getAll, putItem, deleteItem, STORES } from './db.js';
 
-/**
- * UI des dépenses mensuelles (templates)
- * Stockage dans le store "recurring"
- *
- * Un template ressemble à :
- * {
- *   id: string,
- *   account: "perso"|"internet"|"commun"|"cash",
- *   day: number (1..31),
- *   amount: number (négatif),
- *   category: string,
- *   label: string,
- *   paymentMethod: "transfer"|"card"|"cash"|"check",
- *   active: boolean
- * }
- */
+const { STORE_RECURRING } = STORES;
 
 const ACCOUNTS = [
   { value: 'perso', label: 'Compte perso' },
@@ -34,141 +19,131 @@ const PAYMENTS = [
 
 const uid = () => (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
-function createSelect(options, className) {
-  const s = document.createElement('select');
-  s.className = className;
-  options.forEach(o => {
-    const opt = document.createElement('option');
-    opt.value = o.value;
-    opt.textContent = o.label;
-    s.appendChild(opt);
-  });
+function el(tag, attrs = {}, text = '') {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') n.className = v;
+    else n.setAttribute(k, v);
+  }
+  if (text) n.textContent = text;
+  return n;
+}
+
+function select(options, value) {
+  const s = el('select');
+  options.forEach(o => s.appendChild(el('option', { value: o.value }, o.label)));
+  if (value) s.value = value;
   return s;
 }
 
-function createInput(type, placeholder, className) {
-  const i = document.createElement('input');
-  i.type = type;
-  i.placeholder = placeholder;
-  i.className = className;
-  return i;
-}
-
-function rowTemplateItem(tpl) {
-  const div = document.createElement('div');
-  div.className = 'recurrent-item';
-  div.innerHTML = `
-    <div class="ri-main">
-      <div class="ri-label">${tpl.label || '(sans libellé)'}</div>
-      <div class="ri-meta">
-        <span>${tpl.account}</span>
-        <span>Jour ${tpl.day}</span>
-        <span>${tpl.category || '—'}</span>
-        <span>${tpl.paymentMethod || '—'}</span>
-      </div>
-    </div>
-    <div class="ri-side">
-      <div class="ri-amount">${tpl.amount} €</div>
-      <div class="ri-active">${tpl.active ? 'Actif' : 'Inactif'}</div>
-    </div>
-  `;
-  return div;
-}
-
 export function initRecurrentUI() {
-  const container = document.querySelector('[data-recurrent]');
+  const page = document.querySelector('.page[data-page="recurrent"]');
+  if (!page) return;
+
+  const container = page.querySelector('[data-recurrent]');
   if (!container) return;
 
   container.innerHTML = '';
 
-  // --- Formulaire ajout ---
-  const form = document.createElement('div');
-  form.className = 'recurrent-form';
+  const form = el('div', { class: 'recurrent-form' });
 
-  const account = createSelect(ACCOUNTS, 'rf-account');
-  const day = createInput('number', 'Jour (1-31)', 'rf-day');
-  day.min = '1'; day.max = '31';
+  const sAcc = select(ACCOUNTS, 'perso');
+  const iDay = el('input', { type: 'number', min: '1', max: '31', placeholder: 'Jour (1-31)' });
+  const iAmt = el('input', { type: 'number', step: '0.01', placeholder: 'Montant (ex: 49.99)' });
+  const iCat = el('input', { type: 'text', placeholder: 'Catégorie' });
+  const iLab = el('input', { type: 'text', placeholder: 'Libellé' });
+  const sPay = select(PAYMENTS, 'transfer');
 
-  const amount = createInput('number', 'Montant (ex: 49.99)', 'rf-amount');
-  amount.step = '0.01';
+  const addBtn = el('button', { class: 'btn-primary', type: 'button' }, 'Ajouter');
 
-  const category = createInput('text', 'Catégorie', 'rf-category');
-  const label = createInput('text', 'Libellé', 'rf-label');
-  const payment = createSelect(PAYMENTS, 'rf-payment');
-
-  const addBtn = document.createElement('button');
-  addBtn.className = 'btn-primary';
-  addBtn.type = 'button';
-  addBtn.textContent = 'Ajouter';
-
-  const info = document.createElement('div');
-  info.className = 'muted';
-  info.textContent = 'Astuce : le montant sera enregistré comme une dépense (valeur négative).';
-
-  form.appendChild(account);
-  form.appendChild(day);
-  form.appendChild(amount);
-  form.appendChild(category);
-  form.appendChild(label);
-  form.appendChild(payment);
+  form.appendChild(sAcc);
+  form.appendChild(iDay);
+  form.appendChild(iAmt);
+  form.appendChild(iCat);
+  form.appendChild(iLab);
+  form.appendChild(sPay);
   form.appendChild(addBtn);
-  form.appendChild(info);
 
-  // --- Liste ---
-  const list = document.createElement('div');
-  list.className = 'recurrent-list';
+  const list = el('div', { class: 'recurrent-list' });
 
   container.appendChild(form);
   container.appendChild(list);
 
   async function refresh() {
     list.innerHTML = '';
-    const templates = await all('recurring');
-    if (!templates || templates.length === 0) {
-      list.innerHTML = `<div class="muted">Aucun prélèvement enregistré.</div>`;
+    const items = await getAll(STORE_RECURRING);
+
+    if (!items.length) {
+      list.appendChild(el('div', { class: 'muted' }, 'Aucun prélèvement enregistré.'));
       return;
     }
 
-    // tri : compte puis jour
-    templates
+    items
       .slice()
-      .sort((a, b) => (a.account + String(a.day).padStart(2, '0')).localeCompare(b.account + String(b.day).padStart(2, '0')))
-      .forEach(tpl => {
-        list.appendChild(rowTemplateItem(tpl));
+      .sort((a,b) => (a.account + String(a.day).padStart(2,'0')).localeCompare(b.account + String(b.day).padStart(2,'0')))
+      .forEach(item => {
+        const row = el('div', { class: 'recurrent-item' });
+
+        const left = el('div');
+        left.appendChild(el('div', { class: 'ri-label' }, item.label || '(sans libellé)'));
+        const meta = el('div', { class: 'ri-meta' });
+        meta.appendChild(el('span', { class: 'badge' }, item.account));
+        meta.appendChild(el('span', { class: 'badge' }, `Jour ${item.day}`));
+        meta.appendChild(el('span', { class: 'badge' }, item.category || '—'));
+        meta.appendChild(el('span', { class: 'badge' }, item.paymentMethod || '—'));
+        left.appendChild(meta);
+
+        const right = el('div', { class: 'ri-side' });
+        right.appendChild(el('div', { class: 'ri-amount' }, `${item.amount} €`));
+
+        const toggle = el('button', { class: 'btn-secondary', type: 'button' }, item.active === false ? 'Activer' : 'Désactiver');
+        toggle.addEventListener('click', async () => {
+          item.active = item.active === false ? true : false;
+          await putItem(STORE_RECURRING, item);
+          refresh();
+        });
+
+        const del = el('button', { class: 'btn-secondary', type: 'button' }, 'Supprimer');
+        del.addEventListener('click', async () => {
+          await deleteItem(STORE_RECURRING, item.id);
+          refresh();
+        });
+
+        right.appendChild(toggle);
+        right.appendChild(del);
+
+        row.appendChild(left);
+        row.appendChild(right);
+        list.appendChild(row);
       });
   }
 
   addBtn.addEventListener('click', async () => {
-    // validations simples
-    const d = Number(day.value);
-    const a = Number(amount.value);
+    const day = Number(iDay.value);
+    const amt = Number(iAmt.value);
 
-    if (!d || d < 1 || d > 31) return;
-    if (!a || a <= 0) return;
+    if (!day || day < 1 || day > 31) return;
+    if (!amt || amt <= 0) return;
 
-    const tpl = {
+    await addItem(STORE_RECURRING, {
       id: uid(),
-      account: account.value,
-      day: d,
-      amount: -Math.abs(a),               // dépense
-      category: category.value?.trim() || '',
-      label: label.value?.trim() || '',
-      paymentMethod: payment.value,
-      active: true
-    };
+      account: sAcc.value,
+      day,
+      amount: -Math.abs(amt),
+      category: (iCat.value || '').trim(),
+      label: (iLab.value || '').trim(),
+      paymentMethod: sPay.value,
+      active: true,
+      createdAt: new Date().toISOString()
+    });
 
-    await add('recurring', tpl);
+    iDay.value = '';
+    iAmt.value = '';
+    iCat.value = '';
+    iLab.value = '';
 
-    // reset minimal
-    day.value = '';
-    amount.value = '';
-    category.value = '';
-    label.value = '';
-
-    await refresh();
+    refresh();
   });
 
-  // rendu initial
   refresh();
 }
-
