@@ -194,3 +194,102 @@ select {
   color: #9e9e9e;
   border-top: 1px solid #2a2a2a;
 }
+/* ===== SAISIE (TABLEAUX) ===== */
+
+.saisie-toolbar {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.saisie-tabs {
+  display: flex;
+  gap: 0.5rem;
+  background: #121212;
+  border: 1px solid #2a2a2a;
+  border-radius: 999px;
+  padding: 0.25rem;
+}
+
+.tab {
+  border: none;
+  background: transparent;
+  color: #bdbdbd;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.tab.active {
+  background: rgba(58,143,58,0.15);
+  color: #3a8f3a;
+  border: 1px solid rgba(58,143,58,0.25);
+}
+
+.saisie-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  background: #1a1a1a;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+.data-table th,
+.data-table td {
+  border-bottom: 1px solid #2a2a2a;
+  padding: 0.6rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.data-table th {
+  color: #9e9e9e;
+  font-weight: 600;
+  font-size: 0.85rem;
+  background: #141414;
+}
+
+.data-table input,
+.data-table select {
+  width: 100%;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+  color: #e0e0e0;
+  font-size: 0.85rem;
+}
+
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid #2a2a2a;
+  background: #151515;
+  color: #bdbdbd;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: #1f1f1f;
+}
+
+tr.row-neg td { background: rgba(178, 59, 59, 0.05); }
+tr.row-pos td { background: rgba(58, 143, 58, 0.05); }
+
+.saisie-hint {
+  margin-top: 0.75rem;
+}
