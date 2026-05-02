@@ -1,3 +1,8 @@
+/* == TEST VISUEL == */
+body {
+  background: red !important;
+  color: white !important;
+}
 const DEFAULT = 'etat';
 
 function show(route) {
