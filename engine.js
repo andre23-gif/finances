@@ -1,7 +1,7 @@
 // engine.js
 import { add, put, all, STORES } from './db.js';
 
-const (const t of templates) {const uid = () =>
+for (const t of templates) {const uid = () =>
     if (t.active === false) continue;
 
     const d = dateFromFinancialMonth(financialMonth, Number(t.day));
