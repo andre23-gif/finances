@@ -1,36 +1,66 @@
 // app.js
 import { initRouter } from './router.js';
-import { openDB } from './db.js';
-
-import { initSaisieUI } from './ui-saisie.js';
-import { initRecurrentUI } from './ui-recurrent.js';
+import { openDB-recurrent.js';import { openDB } from './db.js';
 import { initStatsUI } from './ui-stats.js';
 import { initArchivesUI } from './ui-archives.js';
 import { updateEtatUI } from './ui-etat.js';
 
+function currentRoute() {
+  return (location.hash || '').replace('#', '') || 'etat';
+}
+
+/**
+ * Appelle uniquement l'UI de la page active.
+ * Important : évite d'initialiser des pages cachées.
+ */
+function renderActivePage() {
+  const r = currentRoute();
+
+  if (r === 'etat') {
+    updateEtatUI();
+    return;
+  }
+
+  if (r === 'saisie') {
+    initSaisieUI();
+    return;
+  }
+
+  if (r === 'recurrent') {
+    initRecurrentUI();
+    return;
+  }
+
+  if (r === 'stats') {
+    initStatsUI();
+    return;
+  }
+
+  if (r === 'archives') {
+    initArchivesUI();
+    return;
+  }
+}
+
 async function init() {
+  // 1) Navigation (affiche la page selon le hash)
   initRouter();
+
+  // 2) DB prête
   await openDB();
 
-  // Init UIs (elles se rendent uniquement dans leur conteneur de page)
-  initSaisieUI();
-  initRecurrentUI();
-  initStatsUI();
-  initArchivesUI();
+  // 3) Rendu initial de la page active
+  renderActivePage();
 
-  // État au démarrage
-  updateEtatUI();
+  // 4) À chaque changement d'onglet, on rend la page active
+  window.addEventListener('hashchange', renderActivePage);
 
-  // Mise à jour État quand on revient dessus
-  window.addEventListener('hashchange', () => {
-    const r = (location.hash || '').replace('#', '') || 'etat';
-    if (r === 'etat') updateEtatUI();
-  });
-
-  // Service Worker (PWA)
+  // 5) Service Worker (PWA)
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js');
   }
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+import { initSaisieUI } from './ui-saisie.js';
