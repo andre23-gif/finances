@@ -113,8 +113,3 @@ async function markApplied(financialMonth, triggeredByMovementId) {
     appliedAt: new Date().toISOString()
   });
 }
-
-async function applyRecurring(financialMonth, triggeredByMovementId) {
-  if (await isApplied(financialMonth)) return;
-
-  const templates = await all(STORES.RECURRING);
