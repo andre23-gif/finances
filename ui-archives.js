@@ -1,11 +1,7 @@
 // ui-archives.js
-import { all } from './db.js';
+import { all, STORES } from './db.js';
 
-function eur(v) {
-  return v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
-}
-
-function downloadJSON(filename, data) {
+function downloadJSON(filename, data) {function eur(v) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -18,24 +14,24 @@ function downloadJSON(filename, data) {
 }
 
 export async function initArchivesUI() {
-  // On cible uniquement le container de la page Archives
+  // Cible uniquement la page Archives (et seulement si visible)
   const page = document.querySelector('.page[data-page="archives"]');
-  if (!page) return;
+  if (!page || page.hidden) return;
 
   const container = page.querySelector('[data-archives]');
   if (!container) return;
 
-  // On charge les mouvements depuis IndexedDB
-  const movements = await all('movements');
+  // Charge les mouvements
+  const movements = await all(STORES.MOVEMENTS);
 
-  // On garde les mouvements "comptabilisés" (si status existe)
+  // Mouvements comptabilisés
   const counted = movements.filter(m =>
     !m.status || m.status === 'SAISIE_MANUELLE' || m.status === 'APPLIQUEE'
   );
 
-  const months = Array.from(new Set(
-    counted.map(m => m.financialMonth).filter(Boolean)
-  )).sort();
+  const months = Array.from(
+    new Set(counted.map(m => m.financialMonth).filter(Boolean))
+  ).sort();
 
   container.innerHTML = '';
 
@@ -87,7 +83,11 @@ export async function initArchivesUI() {
 
     data
       .slice()
-      .sort((a, b) => (String(a.financialMonth) + String(a.date)).localeCompare(String(b.financialMonth) + String(b.date)))
+      .sort((a, b) => {
+        const ak = `${String(a.financialMonth)}|${String(a.date)}|${String(a.label || '')}`;
+        const bk = `${String(b.financialMonth)}|${String(b.date)}|${String(b.label || '')}`;
+        return ak.localeCompare(bk);
+      })
       .forEach(m => {
         const row = document.createElement('div');
         row.className = 'archive-row';
@@ -126,3 +126,6 @@ export async function initArchivesUI() {
   select.addEventListener('change', render);
   render();
 }
+  return v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+}
+
