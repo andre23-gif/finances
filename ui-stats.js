@@ -1,22 +1,25 @@
 // ui-stats.js
 import { all, STORES } from './db.js';
-const { STORE_MOVEMENTS } = STORES;
 
-function eur(v){ return v.toLocaleString('fr-FR',{style:'currency',currency:'EUR'}); }
+function eur(v) {
+  return v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+}
 
-export async function initStatsUI(){
+export async function initStatsUI() {
   const page = document.querySelector('.page[data-page="stats"]');
-  if(!page) return;
-  const container = page.querySelector('[data-stats]');
-  if(!container) return;
+  if (!page || page.hidden) return;
 
-  const all = (await getAll(STORE_MOVEMENTS))
+  const container = page.querySelector('[data-stats]');
+  if (!container) return;
+
+  // ✅ Lire tous les mouvements
+  const movements = (await all(STORES.MOVEMENTS))
     .filter(m => m.status === 'SAISIE_MANUELLE' || m.status === 'APPLIQUEE');
 
-  const months = Array.from(new Set(all.map(m=>m.financialMonth).filter(Boolean))).sort();
+  const months = Array.from(new Set(movements.map(m => m.financialMonth).filter(Boolean))).sort();
 
   container.innerHTML = '';
-  if(!months.length){
+  if (!months.length) {
     container.innerHTML = `<div class="muted">Aucune donnée pour afficher des statistiques.</div>`;
     return;
   }
@@ -30,12 +33,13 @@ export async function initStatsUI(){
   select.style.borderRadius = '10px';
   select.style.padding = '0.6rem';
 
-  months.forEach(m=>{
+  months.forEach(m => {
     const o = document.createElement('option');
-    o.value = m; o.textContent = m;
+    o.value = m;
+    o.textContent = m;
     select.appendChild(o);
   });
-  select.value = months[months.length-1];
+  select.value = months[months.length - 1];
 
   const box = document.createElement('div');
   box.className = 'muted';
@@ -43,29 +47,30 @@ export async function initStatsUI(){
   container.appendChild(select);
   container.appendChild(box);
 
-  function render(){
+  function render() {
     const fm = select.value;
-    const ms = all.filter(m=>m.financialMonth===fm);
-    const income = ms.filter(m=>m.amount>0).reduce((s,m)=>s+m.amount,0);
-    const expense = ms.filter(m=>m.amount<0).reduce((s,m)=>s+Math.abs(m.amount),0);
+    const ms = movements.filter(m => m.financialMonth === fm);
+
+    const income = ms.filter(m => m.amount > 0).reduce((s, m) => s + m.amount, 0);
+    const expense = ms.filter(m => m.amount < 0).reduce((s, m) => s + Math.abs(m.amount), 0);
 
     const byCat = {};
-    ms.filter(m=>m.amount<0).forEach(m=>{
-      const k = (m.category||'Sans catégorie').trim()||'Sans catégorie';
-      byCat[k] = (byCat[k]||0)+Math.abs(m.amount);
+    ms.filter(m => m.amount < 0).forEach(m => {
+      const k = (m.category || 'Sans catégorie').trim() || 'Sans catégorie';
+      byCat[k] = (byCat[k] || 0) + Math.abs(m.amount);
     });
 
     const lines = Object.entries(byCat)
-      .sort((a,b)=>b[1]-a[1])
-      .slice(0,12)
-      .map(([k,v])=>`<div>${k} : <strong>${eur(v)}</strong></div>`)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 12)
+      .map(([k, v]) => `<div>${k} : <strong>${eur(v)}</strong></div>`)
       .join('');
 
     box.innerHTML = `
       <div>Mois : <strong>${fm}</strong></div>
       <div>Entrées : <strong>${eur(income)}</strong></div>
       <div>Dépenses : <strong>${eur(expense)}</strong></div>
-      <div>Solde : <strong>${eur(income-expense)}</strong></div>
+      <div>Solde : <strong>${eur(income - expense)}</strong></div>
       <hr style="border:0;border-top:1px solid #2a2a2a;margin:0.75rem 0;">
       <div><strong>Répartition dépenses (top)</strong></div>
       ${lines || '<div>Aucune dépense.</div>'}
