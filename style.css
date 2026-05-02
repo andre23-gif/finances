@@ -1,295 +1,98 @@
-/* ==================================================
-   RESET & BASE
-   ================================================== */
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Suivi Financier</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0f0f0f" />
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+  <link rel="stylesheet" href="./style.css" />
+  <link rel="manifest" href="./manifest.json" />
+</head>
 
-html, body {
-  margin: 0;
-  padding: 0;
-  background-color: #0f0f0f;
-  color: #e0e0e0;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-}
+<body>
+  <header class="header">
+    <h1>Suivi Financier</h1>
+  </header>
 
-/* ==================================================
-   HEADER
-   ================================================== */
+  <nav class="nav" aria-label="Navigation principale">
+    <button class="nav-item active" type="button" data-route="etat">État</button>
+    <button class="nav-item" type="button" data-route="saisie">Saisie</button>
+    <button class="nav-item" type="button" data-route="recurrent">Récurrent</button>
+    <button class="nav-item" type="button" data-route="stats">Stats</button>
+    <button class="nav-item" type="button" data-route="archives">Archives</button>
+  </nav>
 
-.header {
-  padding: 1rem;
-  text-align: center;
-  border-bottom: 1px solid #2a2a2a;
-}
+  <main id="app">
+    <!-- PAGE ÉTAT -->
+    <section class="page" data-page="etat">
+      <h2>État des comptes</h2>
+      <div class="accounts">
+        <div class="account-card accent-perso">
+          <h3>Compte perso</h3>
+          <div class="account-values" data-account="perso"></div>
+        </div>
 
-.header h1 {
-  margin: 0;
-  font-size: 1.4rem;
-  font-weight: 600;
-}
+        <div class="account-card accent-internet">
+          <h3>Compte internet</h3>
+          <div class="account-values" data-account="internet"></div>
+        </div>
 
-/* ==================================================
-   NAVIGATION
-   ================================================== */
+        <div class="account-card accent-commun">
+          <h3>Compte commun</h3>
+          <div class="account-values" data-account="commun"></div>
+        </div>
 
-.nav {
-  display: flex;
-  justify-content: space-around;
-  background: #121212;
-  border-bottom: 1px solid #2a2a2a;
-}
+        <div class="account-card accent-cash">
+          <h3>Compte cash</h3>
+          <div class="account-values" data-account="cash"></div>
+        </div>
+      </div>
+    </section>
 
-.nav-item {
-  background: none;
-  border: none;
-  color: #bdbdbd;
-  padding: 0.75rem;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
+    <!-- PAGE SAISIE -->
+    <section class="page" data-page="saisie" hidden>
+      <h2>Entrées / sorties</h2>
 
-.nav-item.active {
-  color: #3a8f3a;
-  border-bottom: 2px solid #3a8f3a;
-}
+      <div class="saisie-toolbar">
+        <button class="btn-secondary" type="button" data-add-expense>+ Dépense</button>
+        <button class="btn-secondary" type="button" data-add-income>+ Recette</button>
+        <button class="btn-primary" type="button" data-save-all>Valider tout</button>
+      </div>
 
-/* ==================================================
-   LAYOUT
-   ================================================== */
+      <h3 class="subhead">Dépenses</h3>
+      <div class="table-wrap" data-expenses></div>
 
-#app {
-  padding: 1rem;
-}
+      <h3 class="subhead">Recettes (inclut Salaire)</h3>
+      <div class="table-wrap" data-incomes></div>
 
-.page {
-  padding-bottom: 2rem;
-}
+      <div class="muted saisie-hint">
+        Pour saisir le <strong>salaire</strong> : ajoute une ligne dans <strong>Recettes</strong> et mets la <strong>famille</strong> à <strong>salaire</strong>.
+        Le moteur déclenchera alors les dépenses mensuelles du mois budgétaire suivant.
+      </div>
+    </section>
 
-.page[hidden] {
-  display: none;
-}
+    <!-- PAGE RECURRENT -->
+    <section class="page" data-page="recurrent" hidden>
+      <h2>Dépenses mensuelles</h2>
+      <div data-recurrent></div>
+    </section>
 
-h2 {
-  margin: 0 0 1rem 0;
-  font-size: 1.1rem;
-  color: #bdbdbd;
-}
+    <!-- PAGE STATS -->
+    <section class="page" data-page="stats" hidden>
+      <h2>Statistiques</h2>
+      <div data-stats></div>
+    </section>
 
-/* ==================================================
-   COMPTES (ÉTAT)
-   ================================================== */
+    <!-- PAGE ARCHIVES -->
+    <section class="page" data-page="archives" hidden>
+      <h2>Archives & export</h2>
+      <div data-archives></div>
+    </section>
+  </main>
 
-.accounts {
-  display: grid;
-  gap: 1rem;
-}
+  <footer class="footer">Données locales • Hors connexion</footer>
 
-.account-card {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 10px;
-  padding: 1rem;
-}
-
-.account-card h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1rem;
-  color: #bdbdbd;
-}
-
-.account-card div[data-account] {
-  font-size: 0.95rem;
-}
-
-/* accents couleur par compte */
-.accent-perso   { border-left: 4px solid #2e7d32; }
-.accent-internet{ border-left: 4px solid #388e3c; }
-.accent-commun  { border-left: 4px solid #43a047; }
-.accent-cash    { border-left: 4px solid #bdbdbd; }
-
-/* ==================================================
-   SAISIE / RÉCURRENT / STATS / ARCHIVES
-   ================================================== */
-
-[data-table],
-[data-recurrent],
-[data-stats],
-[data-archives] {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 10px;
-  padding: 1rem;
-  margin-bottom: 1rem;
-}
-
-/* ==================================================
-   BOUTONS GÉNÉRIQUES
-   ================================================== */
-
-button {
-  font-family: inherit;
-}
-
-.btn-primary {
-  background: #2e7d32;
-  color: #ffffff;
-  border: none;
-  padding: 0.6rem 1rem;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.btn-primary:hover {
-  background: #3a8f3a;
-}
-
-.btn-secondary {
-  background: #222;
-  color: #bdbdbd;
-  border: 1px solid #2a2a2a;
-  padding: 0.6rem 1rem;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.btn-secondary:hover {
-  background: #2a2a2a;
-}
-
-/* ==================================================
-   FORMULAIRES
-   ================================================== */
-
-input,
-select {
-  background: #111;
-  border: 1px solid #2a2a2a;
-  border-radius: 6px;
-  padding: 0.45rem;
-  color: #e0e0e0;
-  font-size: 0.85rem;
-}
-
-/* ==================================================
-   ARCHIVES / TEXTE SECONDAIRE
-   ================================================== */
-
-.muted {
-  color: #9e9e9e;
-  font-size: 0.85rem;
-}
-
-/* ==================================================
-   FOOTER
-   ================================================== */
-
-.footer {
-  text-align: center;
-  padding: 0.75rem;
-  font-size: 0.75rem;
-  color: #9e9e9e;
-  border-top: 1px solid #2a2a2a;
-}
-/* ===== SAISIE (TABLEAUX) ===== */
-
-.saisie-toolbar {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-}
-
-.saisie-tabs {
-  display: flex;
-  gap: 0.5rem;
-  background: #121212;
-  border: 1px solid #2a2a2a;
-  border-radius: 999px;
-  padding: 0.25rem;
-}
-
-.tab {
-  border: none;
-  background: transparent;
-  color: #bdbdbd;
-  padding: 0.5rem 0.9rem;
-  border-radius: 999px;
-  cursor: pointer;
-}
-
-.tab.active {
-  background: rgba(58,143,58,0.15);
-  color: #3a8f3a;
-  border: 1px solid rgba(58,143,58,0.25);
-}
-
-.saisie-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.table-wrap {
-  overflow-x: auto;
-  border: 1px solid #2a2a2a;
-  border-radius: 12px;
-  background: #1a1a1a;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 860px;
-}
-
-.data-table th,
-.data-table td {
-  border-bottom: 1px solid #2a2a2a;
-  padding: 0.6rem;
-  text-align: left;
-  vertical-align: middle;
-}
-
-.data-table th {
-  color: #9e9e9e;
-  font-weight: 600;
-  font-size: 0.85rem;
-  background: #141414;
-}
-
-.data-table input,
-.data-table select {
-  width: 100%;
-  background: #111;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
-  padding: 0.45rem 0.55rem;
-  color: #e0e0e0;
-  font-size: 0.85rem;
-}
-
-.icon-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid #2a2a2a;
-  background: #151515;
-  color: #bdbdbd;
-  cursor: pointer;
-}
-
-.icon-btn:hover {
-  background: #1f1f1f;
-}
-
-tr.row-neg td { background: rgba(178, 59, 59, 0.05); }
-tr.row-pos td { background: rgba(58, 143, 58, 0.05); }
-
-.saisie-hint {
-  margin-top: 0.75rem;
-}
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
