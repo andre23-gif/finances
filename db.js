@@ -1,10 +1,12 @@
-// db.js
+// db.js (version stable)
 const DB_NAME = 'suivi-financier';
-const DB_VERSION = 2;
+const DB_VERSION = 1;
 
-const STORE_MOVEMENTS = 'movements';
-const STORE_RECURRING = 'recurring';
-const STORE_FLAGS = 'flags';
+export const STORES = {
+  MOVEMENTS: 'movements',
+  RECURRING: 'recurring',
+  FLAGS: 'flags'
+};
 
 let dbPromise = null;
 
@@ -18,32 +20,23 @@ export function openDB() {
       const db = e.target.result;
 
       // movements
-      if (!db.objectStoreNames.contains(STORE_MOVEMENTS)) {
-        const s = db.createObjectStore(STORE_MOVEMENTS, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(STORES.MOVEMENTS)) {
+        const s = db.createObjectStore(STORES.MOVEMENTS, { keyPath: 'id' });
         s.createIndex('financialMonth', 'financialMonth', { unique: false });
         s.createIndex('account', 'account', { unique: false });
         s.createIndex('type', 'type', { unique: false });
-      } else {
-        const s = e.target.transaction.objectStore(STORE_MOVEMENTS);
-        if (!s.indexNames.contains('financialMonth')) s.createIndex('financialMonth', 'financialMonth', { unique: false });
-        if (!s.indexNames.contains('account')) s.createIndex('account', 'account', { unique: false });
-        if (!s.indexNames.contains('type')) s.createIndex('type', 'type', { unique: false });
       }
 
-      // recurring
-      if (!db.objectStoreNames.contains(STORE_RECURRING)) {
-        const s = db.createObjectStore(STORE_RECURRING, { keyPath: 'id' });
+      // recurring (templates)
+      if (!db.objectStoreNames.contains(STORES.RECURRING)) {
+        const s = db.createObjectStore(STORES.RECURRING, { keyPath: 'id' });
         s.createIndex('active', 'active', { unique: false });
         s.createIndex('account', 'account', { unique: false });
-      } else {
-        const s = e.target.transaction.objectStore(STORE_RECURRING);
-        if (!s.indexNames.contains('active')) s.createIndex('active', 'active', { unique: false });
-        if (!s.indexNames.contains('account')) s.createIndex('account', 'account', { unique: false });
       }
 
-      // flags
-      if (!db.objectStoreNames.contains(STORE_FLAGS)) {
-        db.createObjectStore(STORE_FLAGS, { keyPath: 'financialMonth' });
+      // flags (anti-doublon par mois budgétaire)
+      if (!db.objectStoreNames.contains(STORES.FLAGS)) {
+        db.createObjectStore(STORES.FLAGS, { keyPath: 'financialMonth' });
       }
     };
 
@@ -54,13 +47,13 @@ export function openDB() {
   return dbPromise;
 }
 
-async function store(name, mode = 'readonly') {
+async function getStore(name, mode = 'readonly') {
   const db = await openDB();
   return db.transaction(name, mode).objectStore(name);
 }
 
-export async function addItem(storeName, value) {
-  const s = await store(storeName, 'readwrite');
+export async function add(storeName, value) {
+  const s = await getStore(storeName, 'readwrite');
   return new Promise((resolve, reject) => {
     const r = s.add(value);
     r.onsuccess = () => resolve(true);
@@ -68,8 +61,8 @@ export async function addItem(storeName, value) {
   });
 }
 
-export async function putItem(storeName, value) {
-  const s = await store(storeName, 'readwrite');
+export async function put(storeName, value) {
+  const s = await getStore(storeName, 'readwrite');
   return new Promise((resolve, reject) => {
     const r = s.put(value);
     r.onsuccess = () => resolve(true);
@@ -77,8 +70,8 @@ export async function putItem(storeName, value) {
   });
 }
 
-export async function deleteItem(storeName, key) {
-  const s = await store(storeName, 'readwrite');
+export async function del(storeName, key) {
+  const s = await getStore(storeName, 'readwrite');
   return new Promise((resolve, reject) => {
     const r = s.delete(key);
     r.onsuccess = () => resolve(true);
@@ -86,8 +79,8 @@ export async function deleteItem(storeName, key) {
   });
 }
 
-export async function getAll(storeName) {
-  const s = await store(storeName, 'readonly');
+export async function all(storeName) {
+  const s = await getStore(storeName, 'readonly');
   return new Promise((resolve, reject) => {
     const r = s.getAll();
     r.onsuccess = () => resolve(r.result || []);
@@ -95,8 +88,8 @@ export async function getAll(storeName) {
   });
 }
 
-export async function getByIndex(storeName, indexName, value) {
-  const s = await store(storeName, 'readonly');
+export async function byIndex(storeName, indexName, value) {
+  const s = await getStore(storeName, 'readonly');
   const idx = s.index(indexName);
   return new Promise((resolve, reject) => {
     const r = idx.getAll(value);
@@ -104,5 +97,3 @@ export async function getByIndex(storeName, indexName, value) {
     r.onerror = () => reject(r.error);
   });
 }
-
-export const STORES = { STORE_MOVEMENTS, STORE_RECURRING, STORE_FLAGS };
