@@ -1,5 +1,5 @@
 // ui-stats.js
-import { getAll, STORES } from './db.js';
+import { all, STORES } from './db.js';
 const { STORE_MOVEMENTS } = STORES;
 
 function eur(v){ return v.toLocaleString('fr-FR',{style:'currency',currency:'EUR'}); }
