@@ -1,7 +1,16 @@
 // engine.js
 import { add, put, all, STORES } from './db.js';
 
-for (const t of templates) {const uid = () =>
+// uid défini UNE fois (pas dans la boucle)
+const uid = () =>
+  (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+
+// ✅ Tout ce qui utilise "await" + "continue" va dans une fonction async
+async function applyRecurring(financialMonth, triggeredByMovementId) {
+  // templates doit être défini ici (sinon il n’existe pas)
+  const templates = await all(STORES.RECURRING);
+
+  for (const t of templates) {
     if (t.active === false) continue;
 
     const d = dateFromFinancialMonth(financialMonth, Number(t.day));
@@ -30,6 +39,7 @@ for (const t of templates) {const uid = () =>
 
   await markApplied(financialMonth, triggeredByMovementId);
 }
+``
 
 /**
  * Ajout d’un mouvement + déclencheurs
