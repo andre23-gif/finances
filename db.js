@@ -23,3 +23,6 @@ export const all = s => new Promise(r => {
   const q = db.transaction(s).objectStore(s).getAll();
   q.onsuccess = () => r(q.result);
 });
+export function getAllMovements() {
+  return all('movements');
+}
