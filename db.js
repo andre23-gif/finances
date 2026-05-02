@@ -1,98 +1,108 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8" />
-  <title>Suivi Financier</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#0f0f0f" />
+// db.js
+const DB_NAME = 'suivi-financier';
+const DB_VERSION = 2;
 
-  <link rel="stylesheet" href="./style.css" />
-  <link rel="manifest" href="./manifest.json" />
-</head>
+const STORE_MOVEMENTS = 'movements';
+const STORE_RECURRING = 'recurring';
+const STORE_FLAGS = 'flags';
 
-<body>
-  <header class="header">
-    <h1>Suivi Financier</h1>
-  </header>
+let dbPromise = null;
 
-  <nav class="nav" aria-label="Navigation principale">
-    <button class="nav-item active" type="button" data-route="etat">État</button>
-    <button class="nav-item" type="button" data-route="saisie">Saisie</button>
-    <button class="nav-item" type="button" data-route="recurrent">Récurrent</button>
-    <button class="nav-item" type="button" data-route="stats">Stats</button>
-    <button class="nav-item" type="button" data-route="archives">Archives</button>
-  </nav>
+export function openDB() {
+  if (dbPromise) return dbPromise;
 
-  <main id="app">
-    <!-- PAGE ÉTAT -->
-    <section class="page" data-page="etat">
-      <h2>État des comptes</h2>
-      <div class="accounts">
-        <div class="account-card accent-perso">
-          <h3>Compte perso</h3>
-          <div class="account-values" data-account="perso"></div>
-        </div>
+  dbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
 
-        <div class="account-card accent-internet">
-          <h3>Compte internet</h3>
-          <div class="account-values" data-account="internet"></div>
-        </div>
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
 
-        <div class="account-card accent-commun">
-          <h3>Compte commun</h3>
-          <div class="account-values" data-account="commun"></div>
-        </div>
+      // movements
+      if (!db.objectStoreNames.contains(STORE_MOVEMENTS)) {
+        const s = db.createObjectStore(STORE_MOVEMENTS, { keyPath: 'id' });
+        s.createIndex('financialMonth', 'financialMonth', { unique: false });
+        s.createIndex('account', 'account', { unique: false });
+        s.createIndex('type', 'type', { unique: false });
+      } else {
+        const s = e.target.transaction.objectStore(STORE_MOVEMENTS);
+        if (!s.indexNames.contains('financialMonth')) s.createIndex('financialMonth', 'financialMonth', { unique: false });
+        if (!s.indexNames.contains('account')) s.createIndex('account', 'account', { unique: false });
+        if (!s.indexNames.contains('type')) s.createIndex('type', 'type', { unique: false });
+      }
 
-        <div class="account-card accent-cash">
-          <h3>Compte cash</h3>
-          <div class="account-values" data-account="cash"></div>
-        </div>
-      </div>
-    </section>
+      // recurring
+      if (!db.objectStoreNames.contains(STORE_RECURRING)) {
+        const s = db.createObjectStore(STORE_RECURRING, { keyPath: 'id' });
+        s.createIndex('active', 'active', { unique: false });
+        s.createIndex('account', 'account', { unique: false });
+      } else {
+        const s = e.target.transaction.objectStore(STORE_RECURRING);
+        if (!s.indexNames.contains('active')) s.createIndex('active', 'active', { unique: false });
+        if (!s.indexNames.contains('account')) s.createIndex('account', 'account', { unique: false });
+      }
 
-    <!-- PAGE SAISIE -->
-    <section class="page" data-page="saisie" hidden>
-      <h2>Entrées / sorties</h2>
+      // flags
+      if (!db.objectStoreNames.contains(STORE_FLAGS)) {
+        db.createObjectStore(STORE_FLAGS, { keyPath: 'financialMonth' });
+      }
+    };
 
-      <div class="saisie-toolbar">
-        <button class="btn-secondary" type="button" data-add-expense>+ Dépense</button>
-        <button class="btn-secondary" type="button" data-add-income>+ Recette</button>
-        <button class="btn-primary" type="button" data-save-all>Valider tout</button>
-      </div>
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
 
-      <h3 class="subhead">Dépenses</h3>
-      <div class="table-wrap" data-expenses></div>
+  return dbPromise;
+}
 
-      <h3 class="subhead">Recettes (inclut Salaire)</h3>
-      <div class="table-wrap" data-incomes></div>
+async function store(name, mode = 'readonly') {
+  const db = await openDB();
+  return db.transaction(name, mode).objectStore(name);
+}
 
-      <div class="muted saisie-hint">
-        Pour saisir le <strong>salaire</strong> : ajoute une ligne dans <strong>Recettes</strong> et mets la <strong>famille</strong> à <strong>salaire</strong>.
-        Le moteur déclenchera alors les dépenses mensuelles du mois budgétaire suivant.
-      </div>
-    </section>
+export async function addItem(storeName, value) {
+  const s = await store(storeName, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const r = s.add(value);
+    r.onsuccess = () => resolve(true);
+    r.onerror = () => reject(r.error);
+  });
+}
 
-    <!-- PAGE RECURRENT -->
-    <section class="page" data-page="recurrent" hidden>
-      <h2>Dépenses mensuelles</h2>
-      <div data-recurrent></div>
-    </section>
+export async function putItem(storeName, value) {
+  const s = await store(storeName, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const r = s.put(value);
+    r.onsuccess = () => resolve(true);
+    r.onerror = () => reject(r.error);
+  });
+}
 
-    <!-- PAGE STATS -->
-    <section class="page" data-page="stats" hidden>
-      <h2>Statistiques</h2>
-      <div data-stats></div>
-    </section>
+export async function deleteItem(storeName, key) {
+  const s = await store(storeName, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const r = s.delete(key);
+    r.onsuccess = () => resolve(true);
+    r.onerror = () => reject(r.error);
+  });
+}
 
-    <!-- PAGE ARCHIVES -->
-    <section class="page" data-page="archives" hidden>
-      <h2>Archives & export</h2>
-      <div data-archives></div>
-    </section>
-  </main>
+export async function getAll(storeName) {
+  const s = await store(storeName, 'readonly');
+  return new Promise((resolve, reject) => {
+    const r = s.getAll();
+    r.onsuccess = () => resolve(r.result || []);
+    r.onerror = () => reject(r.error);
+  });
+}
 
-  <footer class="footer">Données locales • Hors connexion</footer>
+export async function getByIndex(storeName, indexName, value) {
+  const s = await store(storeName, 'readonly');
+  const idx = s.index(indexName);
+  return new Promise((resolve, reject) => {
+    const r = idx.getAll(value);
+    r.onsuccess = () => resolve(r.result || []);
+    r.onerror = () => reject(r.error);
+  });
+}
 
-  <script type="module" src="./app.js"></script>
-</body>
-</html>
+export const STORES = { STORE_MOVEMENTS, STORE_RECURRING, STORE_FLAGS };
