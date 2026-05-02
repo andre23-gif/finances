@@ -1,98 +1,27 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8" />
-  <title>Suivi Financier</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#0f0f0f" />
+// router.js
+  return (location.hash || '').replace('#', '') || DEFAULT_ROUTE;const DEFAULT_ROUTE = 'etat';
+}
 
-  <link rel="stylesheet" href="./style.css" />
-  <link rel="manifest" href="./manifest.json" />
-</head>
+function show(route) {
+  document.querySelectorAll('.page[data-page]').forEach(p => {
+    p.hidden = (p.dataset.page !== route);
+  });
 
-<body>
-  <header class="header">
-    <h1>Suivi Financier</h1>
-  </header>
+  document.querySelectorAll('.nav-item[data-route]').forEach(b => {
+    b.classList.toggle('active', b.dataset.route === route);
+  });
+}
 
-  <nav class="nav" aria-label="Navigation principale">
-    <button class="nav-item active" type="button" data-route="etat">État</button>
-    <button class="nav-item" type="button" data-route="saisie">Saisie</button>
-    <button class="nav-item" type="button" data-route="recurrent">Récurrent</button>
-    <button class="nav-item" type="button" data-route="stats">Stats</button>
-    <button class="nav-item" type="button" data-route="archives">Archives</button>
-  </nav>
+export function initRouter() {
+  show(getRoute());
 
-  <main id="app">
-    <!-- PAGE ÉTAT -->
-    <section class="page" data-page="etat">
-      <h2>État des comptes</h2>
-      <div class="accounts">
-        <div class="account-card accent-perso">
-          <h3>Compte perso</h3>
-          <div class="account-values" data-account="perso"></div>
-        </div>
+  window.addEventListener('hashchange', () => show(getRoute()));
 
-        <div class="account-card accent-internet">
-          <h3>Compte internet</h3>
-          <div class="account-values" data-account="internet"></div>
-        </div>
+  document.querySelector('.nav')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.nav-item[data-route]');
+    if (!btn) return;
+    location.hash = btn.dataset.route;
+  });
+}
 
-        <div class="account-card accent-commun">
-          <h3>Compte commun</h3>
-          <div class="account-values" data-account="commun"></div>
-        </div>
-
-        <div class="account-card accent-cash">
-          <h3>Compte cash</h3>
-          <div class="account-values" data-account="cash"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- PAGE SAISIE -->
-    <section class="page" data-page="saisie" hidden>
-      <h2>Entrées / sorties</h2>
-
-      <div class="saisie-toolbar">
-        <button class="btn-secondary" type="button" data-add-expense>+ Dépense</button>
-        <button class="btn-secondary" type="button" data-add-income>+ Recette</button>
-        <button class="btn-primary" type="button" data-save-all>Valider tout</button>
-      </div>
-
-      <h3 class="subhead">Dépenses</h3>
-      <div class="table-wrap" data-expenses></div>
-
-      <h3 class="subhead">Recettes (inclut Salaire)</h3>
-      <div class="table-wrap" data-incomes></div>
-
-      <div class="muted saisie-hint">
-        Pour saisir le <strong>salaire</strong> : ajoute une ligne dans <strong>Recettes</strong> et mets la <strong>famille</strong> à <strong>salaire</strong>.
-        Le moteur déclenchera alors les dépenses mensuelles du mois budgétaire suivant.
-      </div>
-    </section>
-
-    <!-- PAGE RECURRENT -->
-    <section class="page" data-page="recurrent" hidden>
-      <h2>Dépenses mensuelles</h2>
-      <div data-recurrent></div>
-    </section>
-
-    <!-- PAGE STATS -->
-    <section class="page" data-page="stats" hidden>
-      <h2>Statistiques</h2>
-      <div data-stats></div>
-    </section>
-
-    <!-- PAGE ARCHIVES -->
-    <section class="page" data-page="archives" hidden>
-      <h2>Archives & export</h2>
-      <div data-archives></div>
-    </section>
-  </main>
-
-  <footer class="footer">Données locales • Hors connexion</footer>
-
-  <script type="module" src="./app.js"></script>
-</body>
-</html>
+function getRoute() {
