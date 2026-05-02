@@ -1,28 +1,98 @@
-const DB = 'suivi-financier';
-const V = 1;
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Suivi Financier</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0f0f0f" />
 
-const STORES = ['movements', 'recurring', 'flags'];
-let db;
+  <link rel="stylesheet" href="./style.css" />
+  <link rel="manifest" href="./manifest.json" />
+</head>
 
-export function openDB() {
-  return new Promise((res, rej) => {
-    const r = indexedDB.open(DB, V);
-    r.onupgradeneeded = e => {
-      const d = e.target.result;
-      d.createObjectStore(STORES[0], { keyPath: 'id' }).createIndex('financialMonth', 'financialMonth');
-      d.createObjectStore(STORES[1], { keyPath: 'id' });
-      d.createObjectStore(STORES[2], { keyPath: 'financialMonth' });
-    };
-    r.onsuccess = () => (db = r.result, res(db));
-    r.onerror = () => rej(r.error);
-  });
-}
+<body>
+  <header class="header">
+    <h1>Suivi Financier</h1>
+  </header>
 
-export const add = (s, v) => db.transaction(s, 'readwrite').objectStore(s).add(v);
-export const all = s => new Promise(r => {
-  const q = db.transaction(s).objectStore(s).getAll();
-  q.onsuccess = () => r(q.result);
-});
-export function getAllMovements() {
-  return all('movements');
-}
+  <nav class="nav" aria-label="Navigation principale">
+    <button class="nav-item active" type="button" data-route="etat">État</button>
+    <button class="nav-item" type="button" data-route="saisie">Saisie</button>
+    <button class="nav-item" type="button" data-route="recurrent">Récurrent</button>
+    <button class="nav-item" type="button" data-route="stats">Stats</button>
+    <button class="nav-item" type="button" data-route="archives">Archives</button>
+  </nav>
+
+  <main id="app">
+    <!-- PAGE ÉTAT -->
+    <section class="page" data-page="etat">
+      <h2>État des comptes</h2>
+      <div class="accounts">
+        <div class="account-card accent-perso">
+          <h3>Compte perso</h3>
+          <div class="account-values" data-account="perso"></div>
+        </div>
+
+        <div class="account-card accent-internet">
+          <h3>Compte internet</h3>
+          <div class="account-values" data-account="internet"></div>
+        </div>
+
+        <div class="account-card accent-commun">
+          <h3>Compte commun</h3>
+          <div class="account-values" data-account="commun"></div>
+        </div>
+
+        <div class="account-card accent-cash">
+          <h3>Compte cash</h3>
+          <div class="account-values" data-account="cash"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAGE SAISIE -->
+    <section class="page" data-page="saisie" hidden>
+      <h2>Entrées / sorties</h2>
+
+      <div class="saisie-toolbar">
+        <button class="btn-secondary" type="button" data-add-expense>+ Dépense</button>
+        <button class="btn-secondary" type="button" data-add-income>+ Recette</button>
+        <button class="btn-primary" type="button" data-save-all>Valider tout</button>
+      </div>
+
+      <h3 class="subhead">Dépenses</h3>
+      <div class="table-wrap" data-expenses></div>
+
+      <h3 class="subhead">Recettes (inclut Salaire)</h3>
+      <div class="table-wrap" data-incomes></div>
+
+      <div class="muted saisie-hint">
+        Pour saisir le <strong>salaire</strong> : ajoute une ligne dans <strong>Recettes</strong> et mets la <strong>famille</strong> à <strong>salaire</strong>.
+        Le moteur déclenchera alors les dépenses mensuelles du mois budgétaire suivant.
+      </div>
+    </section>
+
+    <!-- PAGE RECURRENT -->
+    <section class="page" data-page="recurrent" hidden>
+      <h2>Dépenses mensuelles</h2>
+      <div data-recurrent></div>
+    </section>
+
+    <!-- PAGE STATS -->
+    <section class="page" data-page="stats" hidden>
+      <h2>Statistiques</h2>
+      <div data-stats></div>
+    </section>
+
+    <!-- PAGE ARCHIVES -->
+    <section class="page" data-page="archives" hidden>
+      <h2>Archives & export</h2>
+      <div data-archives></div>
+    </section>
+  </main>
+
+  <footer class="footer">Données locales • Hors connexion</footer>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
