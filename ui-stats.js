@@ -1,27 +1,39 @@
 // ui-stats.js
 import { getAllMovements } from './db.js';
 
-function eur(v) {
-  return v.toLocaleAllMovements();  return v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
-  container.innerHTML = '<h3>Statistiques</h3>';
-
-  const byMonth = {};
-  data.forEach(m => {
-    if (!byMonth[m.financialMonth]) byMonth[m.financialMonth] = 0;
-    byMonth[m.financialMonth] += m.amount;
+function formatEUR(value) {
+  return value.toLocaleString('fr-FR', {
+    style: 'currency',
+    currency: 'EUR'
   });
-
-  Object.entries(byMonth)
-    .sort()
-    .forEach(([month, total]) => {
-      const div = document.createElement('div');
-      div.textContent = `${month} : ${eur(total)}`;
-      container.appendChild(div);
-    });
-}
 }
 
 export async function initStatsUI() {
   const container = document.querySelector('[data-stats]');
   if (!container) return;
 
+  const movements = await getAllMovements();
+
+  // Nettoyage
+  container.innerHTML = '<h3>Statistiques</h3>';
+
+  // Agrégation par mois budgétaire
+  const totalsByMonth = {};
+
+  movements.forEach(m => {
+    if (!m.financialMonth) return;
+    if (!totalsByMonth[m.financialMonth]) {
+      totalsByMonth[m.financialMonth] = 0;
+    }
+    totalsByMonth[m.financialMonth] += m.amount;
+  });
+
+  // Affichage simple
+  Object.keys(totalsByMonth)
+    .sort()
+    .forEach(month => {
+      const div = document.createElement('div');
+      div.textContent = `${month} : ${formatEUR(totalsByMonth[month])}`;
+      container.appendChild(div);
+    });
+}
