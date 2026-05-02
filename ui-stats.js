@@ -12,17 +12,16 @@ export async function initStatsUI() {
   const container = document.querySelector('[data-stats]');
   if (!container) return;
 
-  const movements = await getAllMovements();
+  const movements = await all('movements');
+
   container.innerHTML = '<h3>Statistiques</h3>';
 
   const totalsByMonth = {};
 
   movements.forEach(m => {
     if (!m.financialMonth) return;
-    if (!totalsByMonth[m.financialMonth]) {
-      totalsByMonth[m.financialMonth] = 0;
-    }
-    totalsByMonth[m.financialMonth] += m.amount;
+    totalsByMonth[m.financialMonth] =
+      (totalsByMonth[m.financialMonth] || 0) + m.amount;
   });
 
   Object.keys(totalsByMonth)
