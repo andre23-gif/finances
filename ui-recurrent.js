@@ -267,14 +267,27 @@ export function initRecurrentUI() {
         const left = el('div');
         left.appendChild(el('div', { class: 'ri-label' }, item.label || '(sans libellé)'));
 
-        const meta = el('div', { class: 'ri-meta' });
-        meta.append(
-          el('span', { class: 'badge' }, item.account),
-          el('span', { class: 'badge' }, `Jour ${item.day}`),
-          el('span', { class: 'badge' }, item.category || '—'),
-          el('span', { class: 'badge' }, item.paymentMethod || '—')
-        );
-        left.appendChild(meta);
+const meta = el('div', { class: 'ri-meta' });
+
+const badgeApply = el(
+  'span',
+  { class: 'badge' },
+  item.active === false ? '⏸ Inactif' : '✅ Appliqué au prochain salaire'
+);
+
+// Style (optionnel mais propre)
+badgeApply.style.borderColor = item.active === false ? '#555' : '#2f7f55';
+badgeApply.style.color = item.active === false ? '#aaa' : '#6ee7b7';
+
+meta.append(
+  el('span', { class: 'badge' }, item.account),
+  el('span', { class: 'badge' }, `Jour ${item.day}`),
+  el('span', { class: 'badge' }, item.category || '—'),
+  el('span', { class: 'badge' }, item.paymentMethod || '—'),
+  badgeApply
+);
+
+left.appendChild(meta);
 
         const right = el('div', { class: 'ri-side' });
         right.appendChild(el('div', { class: 'ri-amount' }, eur(item.amount)));
