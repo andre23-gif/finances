@@ -61,8 +61,14 @@ export async function initArchivesUI() {
   exportBtn.type = 'button';
   exportBtn.textContent = 'Exporter JSON';
 
-  header.appendChild(select);
-  header.appendChild(exportBtn);
+const importBtn = document.createElement('button');
+importBtn.className = 'btn-secondary';
+importBtn.type = 'button';
+importBtn.textContent = 'Importer JSON';
+
+header.appendChild(select);
+header.appendChild(importBtn);
+header.appendChild(exportBtn);
 
   const list = document.createElement('div');
   list.className = 'archives-list';
