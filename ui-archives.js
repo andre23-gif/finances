@@ -1,7 +1,13 @@
 // ui-archives.js
 import { all, STORES } from './db.js';
 
-function eur blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });function eur(value) {
+function eur(value) {
+  const v = Number(value || 0);
+  return v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+}
+
+function downloadJSON(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement('a');
@@ -28,13 +34,10 @@ export async function initArchivesUI() {
     !m.status || m.status === 'SAISIE_MANUELLE' || m.status === 'APPLIQUEE'
   );
 
-  const months = Array.from(
-    new Set(counted.map(m => m.financialMonth).filter(Boolean))
-  ).sort();
+  const months = Array.from(new Set(counted.map(m => m.financialMonth).filter(Boolean))).sort();
 
   container.innerHTML = '';
 
-  // Header (filtre + export)
   const header = document.createElement('div');
   header.className = 'archives-header';
 
@@ -71,9 +74,7 @@ export async function initArchivesUI() {
     list.innerHTML = '';
     const fm = select.value;
 
-    const data = (fm === 'all')
-      ? counted
-      : counted.filter(m => m.financialMonth === fm);
+    const data = (fm === 'all') ? counted : counted.filter(m => m.financialMonth === fm);
 
     if (!data.length) {
       list.innerHTML = '<div class="muted">Aucune donnée.</div>';
@@ -115,23 +116,11 @@ export async function initArchivesUI() {
 
   exportBtn.addEventListener('click', () => {
     const fm = select.value;
-
-    const data = (fm === 'all')
-      ? counted
-      : counted.filter(m => m.financialMonth === fm);
-
-    const name = (fm === 'all')
-      ? 'archives-completes.json'
-      : `archives-${fm}.json`;
-
+    const data = (fm === 'all') ? counted : counted.filter(m => m.financialMonth === fm);
+    const name = (fm === 'all') ? 'archives-completes.json' : `archives-${fm}.json`;
     downloadJSON(name, data);
   });
 
   select.addEventListener('change', render);
   render();
 }
-  const v = Number(value || 0);
-  return v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
-}
-
-function downloadJSON(filename, data) {
