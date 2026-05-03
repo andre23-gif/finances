@@ -1,98 +1,52 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8" />
-  <title>Suivi Financier</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#0f0f0f" />
+:root{
+  --bg:#0f0f10;
+  --panel:#151518;
+  --panel2:#1b1b1f;
+  --text:#e9e9ee;
+  --muted:#a7a7b3;
+  --border:rgba(255,255,255,.10);
+  --shadow:0 10px 30px rgba(0,0,0,.35);
+  --radius:16px;
 
-  <link rel="stylesheet" href="./style.css" />
-  <link rel="manifest" href="./manifest.json" />
-</head>
+  --primary:#7c5cff;
+  --primary2:#6bffb8;
 
-<body>
-  <header class="header">
-    <h1>Suivi Financier</h1>
-  </header>
+  --perso:#7c5cff;
+  --internet:#2dd4ff;
+  --commun:#ffb86b;
+  --cash:#66ff99;
 
-  <nav class="nav" aria-label="Navigation principale">
-    <button class="nav-item active" type="button" data-route="etat">État</button>
-    <button class="nav-item" type="button" data-route="saisie">Saisie</button>
-    <button class="nav-item" type="button" data-route="recurrent">Récurrent</button>
-    <button class="nav-item" type="button" data-route="stats">Stats</button>
-    <button class="nav-item" type="button" data-route="archives">Archives</button>
-  </nav>
+  --neg:#ff5c7a;
+  --pos:#4be38a;
+}
 
-  <main id="app">
-    <!-- PAGE ÉTAT -->
-    <section class="page" data-page="etat">
-      <h2>État des comptes</h2>
-      <div class="accounts">
-        <div class="account-card accent-perso">
-          <h3>Compte perso</h3>
-          <div class="account-values" data-account="perso"></div>
-        </div>
+*{ box-sizing:border-box; }
+html,body{ height:100%; }
+html{ color-scheme:dark; }
+body{
+  margin:0;
+  background:radial-gradient(1200px 700px at 20% -10%, rgba(124,92,255,.18), transparent 60%),
+             radial-gradient(1000px 650px at 85% 0%, rgba(107,255,184,.14), transparent 55%),
+             var(--bg);
+  color:var(--text);
+  font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
 
-        <div class="account-card accent-internet">
-          <h3>Compte internet</h3>
-          <div class="account-values" data-account="internet"></div>
-        </div>
+/* Typo */
+h1,h2,h3{ margin:0 0 .6rem 0; letter-spacing:.2px; }
+h1{ font-size:1.25rem; }
+h2{ font-size:1.05rem; opacity:.96; }
+h3{ font-size:.95rem; opacity:.95; }
 
-        <div class="account-card accent-commun">
-          <h3>Compte commun</h3>
-          <div class="account-values" data-account="commun"></div>
-        </div>
+.muted{ color:var(--muted); }
+.subhead{ margin-top:1.1rem; opacity:.92; }
 
-        <div class="account-card accent-cash">
-          <h3>Compte cash</h3>
-          <div class="account-values" data-account="cash"></div>
-        </div>
-      </div>
-    </section>
+/* Layout */
+#app{
+  max-width:1100px;
+  margin:0 auto;
+  padding:1rem;
+}
+.page{ padding:1rem 0; }
 
-    <!-- PAGE SAISIE -->
-    <section class="page" data-page="saisie" hidden>
-      <h2>Entrées / sorties</h2>
-
-      <div class="saisie-toolbar">
-        <button class="btn-secondary" type="button" data-add-expense>+ Dépense</button>
-        <button class="btn-secondary" type="button" data-add-income>+ Recette</button>
-        <button class="btn-primary" type="button" data-save-all>Valider tout</button>
-      </div>
-
-      <h3 class="subhead">Dépenses</h3>
-      <div class="table-wrap" data-expenses></div>
-
-      <h3 class="subhead">Recettes (inclut Salaire)</h3>
-      <div class="table-wrap" data-incomes></div>
-
-      <div class="muted saisie-hint">
-        Pour saisir le <strong>salaire</strong> : ajoute une ligne dans <strong>Recettes</strong> et mets la <strong>famille</strong> à <strong>salaire</strong>.
-        Le moteur déclenchera alors les dépenses mensuelles du mois budgétaire suivant.
-      </div>
-    </section>
-
-    <!-- PAGE RECURRENT -->
-    <section class="page" data-page="recurrent" hidden>
-      <h2>Dépenses mensuelles</h2>
-      <div data-recurrent></div>
-    </section>
-
-    <!-- PAGE STATS -->
-    <section class="page" data-page="stats" hidden>
-      <h2>Statistiques</h2>
-      <div data-stats></div>
-    </section>
-
-    <!-- PAGE ARCHIVES -->
-    <section class="page" data-page="archives" hidden>
-      <h2>Archives & export</h2>
-      <div data-archives></div>
-    </section>
-  </main>
-
-  <footer class="footer">Données locales • Hors connexion</footer>
-
-  <script type="module" src="./app.js"></script>
-</body>
-</html>
+/* Header */
