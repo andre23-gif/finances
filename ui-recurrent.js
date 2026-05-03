@@ -1,25 +1,15 @@
 // ui-recurrent.js
 import { add, put, del, all, STORES } from './db.js';
 
-const ACCOUNTS = [
-  { value: 'perso', label: 'Compte perso' },
-  { value: 'internet', label: 'Compte internet' },
-  { value: 'commun', label: 'Compte commun' },
-  { value: 'cash', label: 'Compte cash' }
-];
+/* ---------- Utils ---------- */
 
-const PAYMENTS = [
-  { value: 'transfer', label: 'Virement' },
-  { value: 'card', label: 'Carte' },
-  { value: 'cash', label: 'Cash' },
-  { value: 'check', label: 'Chèque' }
-];
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
 
-function uid() {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return String(Date.now()) + '-' + Math.random().toString(16).slice(2);
+function eur(value) {
+  const v = Number(value || 0);
+  return v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
 }
 
 function el(tag, attrs = {}, text = '') {
@@ -39,8 +29,53 @@ function select(options, value) {
   return s;
 }
 
+function uid() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return String(Date.now()) + '-' + Math.random().toString(16).slice(2);
+}
+
+/* ---------- Totaux ---------- */
+
+async function computeTotals() {
+  const movements = await all(STORES.MOVEMENTS);
+  const currentMonth = todayISO().slice(0, 7);
+
+  const sum = () => ({ in: 0, out: 0 });
+  const month = sum();
+  const allTime = sum();
+
+  for (const m of movements) {
+    const amt = Number(m.amount || 0);
+
+    if (amt > 0) {
+      allTime.in += amt;
+      if (m.financialMonth === currentMonth) month.in += amt;
+    }
+    if (amt < 0) {
+      allTime.out += amt;
+      if (m.financialMonth === currentMonth) month.out += amt;
+    }
+  }
+
+  return {
+    month: {
+      in: month.in,
+      out: Math.abs(month.out),
+      net: month.in + month.out
+    },
+    all: {
+      in: allTime.in,
+      out: Math.abs(allTime.out),
+      net: allTime.in + allTime.out
+    }
+  };
+}
+
+/* ---------- UI ---------- */
+
 export function initRecurrentUI() {
-  // ⚠️ IMPORTANT: on cible UNIQUEMENT la page "recurrent"
   const page = document.querySelector('.page[data-page="recurrent"]');
   if (!page || page.hidden) return;
 
@@ -49,34 +84,63 @@ export function initRecurrentUI() {
 
   container.innerHTML = '';
 
-  // --- Formulaire ---
+  /* ---------- Totaux en haut ---------- */
+  const totals = el('div', { class: 'recurrent-totals' });
+  totals.innerHTML = '<div class="muted">Chargement des totaux…</div>';
+  page.insertBefore(totals, container);
+
+  (async () => {
+    const t = await computeTotals();
+    totals.innerHTML = `
+      <div class="totals-block">
+        <strong>Mois courant</strong>
+        <div>Entrées : ${eur(t.month.in)}</div>
+        <div>Sorties : ${eur(t.month.out)}</div>
+        <div><b>Net : ${eur(t.month.net)}</b></div>
+      </div>
+      <div class="totals-block">
+        <strong>Cumul global</strong>
+        <div>Entrées : ${eur(t.all.in)}</div>
+        <div>Sorties : ${eur(t.all.out)}</div>
+        <div><b>Net : ${eur(t.all.net)}</b></div>
+      </div>
+    `;
+  })();
+
+  /* ---------- Formulaire ---------- */
+
+  const ACCOUNTS = [
+    { value: 'perso', label: 'Compte perso' },
+    { value: 'internet', label: 'Compte internet' },
+    { value: 'commun', label: 'Compte commun' },
+    { value: 'cash', label: 'Compte cash' }
+  ];
+
+  const PAYMENTS = [
+    { value: 'transfer', label: 'Virement' },
+    { value: 'card', label: 'Carte' },
+    { value: 'cash', label: 'Cash' },
+    { value: 'check', label: 'Chèque' }
+  ];
+
   const form = el('div', { class: 'recurrent-form' });
 
   const sAcc = select(ACCOUNTS, 'perso');
   const iDay = el('input', { type: 'number', min: '1', max: '31', placeholder: 'Jour (1-31)' });
-  const iAmt = el('input', { type: 'number', step: '0.01', placeholder: 'Montant (ex: 49.99)' });
+  const iAmt = el('input', { type: 'number', step: '0.01', placeholder: 'Montant' });
   const iCat = el('input', { type: 'text', placeholder: 'Catégorie' });
   const iLab = el('input', { type: 'text', placeholder: 'Libellé' });
   const sPay = select(PAYMENTS, 'transfer');
 
   const addBtn = el('button', { class: 'btn-primary', type: 'button' }, 'Ajouter');
-
   const hint = el('div', { class: 'muted' }, 'Astuce : le montant est stocké en dépense (valeur négative).');
 
-  form.appendChild(sAcc);
-  form.appendChild(iDay);
-  form.appendChild(iAmt);
-  form.appendChild(iCat);
-  form.appendChild(iLab);
-  form.appendChild(sPay);
-  form.appendChild(addBtn);
-  form.appendChild(hint);
+  form.append(sAcc, iDay, iAmt, iCat, iLab, sPay, addBtn, hint);
 
-  // --- Liste ---
+  /* ---------- Liste ---------- */
+
   const list = el('div', { class: 'recurrent-list' });
-
-  container.appendChild(form);
-  container.appendChild(list);
+  container.append(form, list);
 
   async function refresh() {
     list.innerHTML = '';
@@ -89,8 +153,10 @@ export function initRecurrentUI() {
 
     items
       .slice()
-      .sort((a, b) => (a.account + String(a.day).padStart(2, '0'))
-        .localeCompare(b.account + String(b.day).padStart(2, '0')))
+      .sort((a, b) =>
+        (a.account + String(a.day).padStart(2, '0'))
+          .localeCompare(b.account + String(b.day).padStart(2, '0'))
+      )
       .forEach(item => {
         const row = el('div', { class: 'recurrent-item' });
 
@@ -98,14 +164,16 @@ export function initRecurrentUI() {
         left.appendChild(el('div', { class: 'ri-label' }, item.label || '(sans libellé)'));
 
         const meta = el('div', { class: 'ri-meta' });
-        meta.appendChild(el('span', { class: 'badge' }, item.account));
-        meta.appendChild(el('span', { class: 'badge' }, `Jour ${item.day}`));
-        meta.appendChild(el('span', { class: 'badge' }, item.category || '—'));
-        meta.appendChild(el('span', { class: 'badge' }, item.paymentMethod || '—'));
+        meta.append(
+          el('span', { class: 'badge' }, item.account),
+          el('span', { class: 'badge' }, `Jour ${item.day}`),
+          el('span', { class: 'badge' }, item.category || '—'),
+          el('span', { class: 'badge' }, item.paymentMethod || '—')
+        );
         left.appendChild(meta);
 
         const right = el('div', { class: 'ri-side' });
-        right.appendChild(el('div', { class: 'ri-amount' }, `${item.amount} €`));
+        right.appendChild(el('div', { class: 'ri-amount' }, eur(item.amount)));
 
         const toggle = el(
           'button',
@@ -125,11 +193,8 @@ export function initRecurrentUI() {
           refresh();
         });
 
-        right.appendChild(toggle);
-        right.appendChild(remove);
-
-        row.appendChild(left);
-        row.appendChild(right);
+        right.append(toggle, remove);
+        row.append(left, right);
         list.appendChild(row);
       });
   }
@@ -145,7 +210,7 @@ export function initRecurrentUI() {
       id: uid(),
       account: sAcc.value,
       day,
-      amount: -Math.abs(amt), // dépense => négatif
+      amount: -Math.abs(amt),
       category: (iCat.value || '').trim(),
       label: (iLab.value || '').trim(),
       paymentMethod: sPay.value,
@@ -155,7 +220,6 @@ export function initRecurrentUI() {
 
     await add(STORES.RECURRING, tpl);
 
-    // reset
     iDay.value = '';
     iAmt.value = '';
     iCat.value = '';
