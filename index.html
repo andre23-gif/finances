@@ -88,7 +88,16 @@
     <!-- PAGE ARCHIVES -->
     <section class="page" data-page="archives" hidden>
       <h2>Archives & export</h2>
-      <div data-archives></div>
+      <div data-archives>
+  <!-- Import JSON -->
+  <div class="import-json">
+    <input type="file" id="import-json-input" accept=".json">
+    <button type="button" id="import-json-btn">Importer (remplacement total)</button>
+  </div>
+
+  <pre id="archivesValeursView"></pre>
+  <pre id="archivesFluxView"></pre>
+</div>
     </section>
   </main>
 
