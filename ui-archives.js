@@ -105,15 +105,17 @@ header.appendChild(exportBtn);
         const amt = Number(m.amount || 0);
 
         row.innerHTML = `
-          <div class="ar-main">
-            <span class="ar-date">${date}</span>
-            <span class="ar-label">${label}</span>
-            <span class="ar-cat">${cat}</span>
-          </div>
-          <div class="ar-side">
-            <span class="ar-acc">${acc}</span>
-            <span class="ar-amt ${amt < 0 ? 'neg' : 'pos'}">${eur(amt)}</span>
-          </div>
+  <div class="ar-main">
+    <span class="ar-date">${date}</span>
+    <span class="ar-label">${label}</span>
+    <span class="ar-cat">${cat}</span>
+  </div>
+  <div class="ar-side">
+    <span class="ar-acc">${acc}</span>
+    <span class="ar-amt ${amt < 0 ? 'neg' : 'pos'}">${eur(amt)}</span>
+    <button class="ar-del" type="button" title="Supprimer">❌</button>
+  </div>
+`;
         `;
 
         list.appendChild(row);
