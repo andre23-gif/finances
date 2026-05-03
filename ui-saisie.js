@@ -140,38 +140,59 @@ function readRows(tbody, kind) {
 async function computeTotals() {
   const movements = await all(STORES.MOVEMENTS);
 
-  // Mois budgétaire "logique" = aujourd'hui (engine applique déjà la règle SALAIRE → mois suivant)
+  // Mois budgétaire courant (cohérent avec le moteur : financialMonth est déjà écrit en base)
   const currentMonth = todayISO().slice(0, 7);
 
   const sum = () => ({ in: 0, out: 0 });
-
   const month = sum();
   const allTime = sum();
 
+  // Totaux par compte (mois courant)
+  const byAccount = {
+    perso: sum(),
+    internet: sum(),
+    commun: sum(),
+    cash: sum()
+  };
+
   for (const m of movements) {
     const amt = Number(m.amount || 0);
+    const fm = m.financialMonth;
+    const acc = m.account;
 
-    if (amt > 0) {
-      allTime.in += amt;
-      if (m.financialMonth === currentMonth) month.in += amt;
-    }
-    if (amt < 0) {
-      allTime.out += amt;
-      if (m.financialMonth === currentMonth) month.out += amt;
+    // Global
+    if (amt > 0) allTime.in += amt;
+    if (amt < 0) allTime.out += amt;
+
+    // Mois courant
+    if (fm === currentMonth) {
+      if (amt > 0) month.in += amt;
+      if (amt < 0) month.out += amt;
+
+      // Par compte (mois courant)
+      if (byAccount[acc]) {
+        if (amt > 0) byAccount[acc].in += amt;
+        if (amt < 0) byAccount[acc].out += amt;
+      }
     }
   }
 
+  const pack = (t) => ({
+    in: t.in,
+    out: Math.abs(t.out),
+    net: t.in + t.out
+  });
+
+  const byAccPacked = {};
+  for (const [k, v] of Object.entries(byAccount)) {
+    byAccPacked[k] = pack(v);
+  }
+
   return {
-    month: {
-      in: month.in,
-      out: Math.abs(month.out),
-      net: month.in + month.out
-    },
-    all: {
-      in: allTime.in,
-      out: Math.abs(allTime.out),
-      net: allTime.in + allTime.out
-    }
+    currentMonth,
+    month: pack(month),
+    all: pack(allTime),
+    byAccountMonth: byAccPacked
   };
 }
 
