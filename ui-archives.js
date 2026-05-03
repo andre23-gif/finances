@@ -1,5 +1,22 @@
 // ui-archives.js
-import { all, STORES } from './db.js('.page[data-page="archives"]');import { all, STORES } from './db.js';
+import { all, STORES } from './db.js';
+
+function eur blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });function eur(value) {
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+
+  document.body.appendChild(a);
+  a.click();
+
+  URL.revokeObjectURL(url);
+  a.remove();
+}
+
+export async function initArchivesUI() {
+  const page = document.querySelector('.page[data-page="archives"]');
   if (!page || page.hidden) return;
 
   const container = page.querySelector('[data-archives]');
@@ -17,6 +34,7 @@ import { all, STORES } from './db.js('.page[data-page="archives"]');import { all
 
   container.innerHTML = '';
 
+  // Header (filtre + export)
   const header = document.createElement('div');
   header.className = 'archives-header';
 
@@ -28,12 +46,12 @@ import { all, STORES } from './db.js('.page[data-page="archives"]');import { all
   optAll.textContent = 'Tous les mois';
   select.appendChild(optAll);
 
-  months.forEach(m => {
+  for (const m of months) {
     const o = document.createElement('option');
     o.value = m;
     o.textContent = m;
     select.appendChild(o);
-  });
+  }
 
   const exportBtn = document.createElement('button');
   exportBtn.className = 'btn-primary';
@@ -65,8 +83,8 @@ import { all, STORES } from './db.js('.page[data-page="archives"]');import { all
     data
       .slice()
       .sort((a, b) => {
-        const ak = `${a.financialMonth}|${a.date}|${a.label || ''}`;
-        const bk = `${b.financialMonth}|${b.date}|${b.label || ''}`;
+        const ak = `${String(a.financialMonth)}|${String(a.date)}|${String(a.label || '')}`;
+        const bk = `${String(b.financialMonth)}|${String(b.date)}|${String(b.label || '')}`;
         return ak.localeCompare(bk);
       })
       .forEach(m => {
@@ -90,38 +108,30 @@ import { all, STORES } from './db.js('.page[data-page="archives"]');import { all
             <span class="ar-amt ${amt < 0 ? 'neg' : 'pos'}">${eur(amt)}</span>
           </div>
         `;
+
         list.appendChild(row);
       });
   }
 
   exportBtn.addEventListener('click', () => {
     const fm = select.value;
+
     const data = (fm === 'all')
       ? counted
       : counted.filter(m => m.financialMonth === fm);
 
-    const name = (fm === 'all') ? 'archives-completes.json' : `archives-${fm}.json`;
+    const name = (fm === 'all')
+      ? 'archives-completes.json'
+      : `archives-${fm}.json`;
+
     downloadJSON(name, data);
   });
 
   select.addEventListener('change', render);
   render();
 }
-
-function eur(v) {
-  return Number(v).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+  const v = Number(value || 0);
+  return v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
 }
 
 function downloadJSON(filename, data) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  URL.revokeObjectURL(url);
-  a.remove();
-}
-
-export async function initArchivesUI() {
