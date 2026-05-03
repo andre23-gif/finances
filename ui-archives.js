@@ -1,71 +1,12 @@
 // ui-archives.js
-import { all, STORES } from './db.js';
-
-function eur(v) {
-  return v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
-}
-        row.className = 'archive-row';
-
-        const label = m.label || '(sans libellé)';
-        const cat = m.category || '—';
-        const acc = m.account || '—';
-        const date = m.date || '—';
-        const amt = Number(m.amount || 0);
-
-        row.innerHTML = `
-          <div class="ar-main">
-            <span class="ar-date">${date}</span>
-            <span class="ar-label">${label}</span>
-            <span class="ar-cat">${cat}</span>
-          </div>
-          <div class="ar-side">
-            <span class="ar-acc">${acc}</span>
-            <span class="ar-amt ${amt < 0 ? 'neg' : 'pos'}">${eur(amt)}</span>
-          </div>
-        `;
-        list.appendChild(row);
-      });
-  }
-
-  exportBtn.addEventListener('click', () => {
-    const fm = select.value;
-    const data = (fm === 'all')
-      ? counted
-      : counted.filter(m => m.financialMonth === fm);
-
-    const name = (fm === 'all') ? 'archives-completes.json' : `archives-${fm}.json`;
-    downloadJSON(name, data);
-  });
-
-  select.addEventListener('change', render);
-  render();
-}
-}
-
-function downloadJSON(filename, data) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  URL.revokeObjectURL(url);
-  a.remove();
-}
-
-export async function initArchivesUI() {
-  // Cible uniquement la page Archives (et seulement si visible)
-  const page = document.querySelector('.page[data-page="archives"]');
+import { all, STORES } from './db.js('.page[data-page="archives"]');import { all, STORES } from './db.js';
   if (!page || page.hidden) return;
 
   const container = page.querySelector('[data-archives]');
   if (!container) return;
 
-  // Charge les mouvements
   const movements = await all(STORES.MOVEMENTS);
 
-  // Mouvements comptabilisés
   const counted = movements.filter(m =>
     !m.status || m.status === 'SAISIE_MANUELLE' || m.status === 'APPLIQUEE'
   );
@@ -76,7 +17,6 @@ export async function initArchivesUI() {
 
   container.innerHTML = '';
 
-  // Header (filtre + export)
   const header = document.createElement('div');
   header.className = 'archives-header';
 
@@ -117,7 +57,7 @@ export async function initArchivesUI() {
       ? counted
       : counted.filter(m => m.financialMonth === fm);
 
-    if (data.length === 0) {
+    if (!data.length) {
       list.innerHTML = '<div class="muted">Aucune donnée.</div>';
       return;
     }
@@ -125,6 +65,63 @@ export async function initArchivesUI() {
     data
       .slice()
       .sort((a, b) => {
-        const ak = `${String(a.financialMonth)}|${String(a.date)}|${String(a.label || '')}`;
-        const bk = `${String(b.financialMonth)}|${String(b.date)}|${String(b.label || '')}`;
+        const ak = `${a.financialMonth}|${a.date}|${a.label || ''}`;
+        const bk = `${b.financialMonth}|${b.date}|${b.label || ''}`;
         return ak.localeCompare(bk);
+      })
+      .forEach(m => {
+        const row = document.createElement('div');
+        row.className = 'archive-row';
+
+        const label = m.label || '(sans libellé)';
+        const cat = m.category || '—';
+        const acc = m.account || '—';
+        const date = m.date || '—';
+        const amt = Number(m.amount || 0);
+
+        row.innerHTML = `
+          <div class="ar-main">
+            <span class="ar-date">${date}</span>
+            <span class="ar-label">${label}</span>
+            <span class="ar-cat">${cat}</span>
+          </div>
+          <div class="ar-side">
+            <span class="ar-acc">${acc}</span>
+            <span class="ar-amt ${amt < 0 ? 'neg' : 'pos'}">${eur(amt)}</span>
+          </div>
+        `;
+        list.appendChild(row);
+      });
+  }
+
+  exportBtn.addEventListener('click', () => {
+    const fm = select.value;
+    const data = (fm === 'all')
+      ? counted
+      : counted.filter(m => m.financialMonth === fm);
+
+    const name = (fm === 'all') ? 'archives-completes.json' : `archives-${fm}.json`;
+    downloadJSON(name, data);
+  });
+
+  select.addEventListener('change', render);
+  render();
+}
+
+function eur(v) {
+  return Number(v).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+}
+
+function downloadJSON(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  URL.revokeObjectURL(url);
+  a.remove();
+}
+
+export async function initArchivesUI() {
