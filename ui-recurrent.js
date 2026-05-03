@@ -38,6 +38,10 @@ function uid() {
   return String(Date.now()) + '-' + Math.random().toString(16).slice(2);
 }
 
+function netColor(n) {
+  return n < 0 ? '#ff6b6b' : '#6ee7b7';
+}
+
 /* ==================== Totaux ==================== */
 
 async function computeTotals() {
@@ -45,91 +49,138 @@ async function computeTotals() {
   const currentMonth = todayISO().slice(0, 7);
 
   const sum = () => ({ in: 0, out: 0 });
+  const pack = t => ({ in: t.in, out: Math.abs(t.out), net: t.in + t.out });
 
-  const month = sum();
-  const allTime = sum();
-  const byAccount = {
-    perso: sum(),
-    commun: sum(),
-    internet: sum(),
-    cash: sum()
-  };
+  const monthAll = sum();
+  const allAll = sum();
+
+  const byAccMonth = { perso: sum(), commun: sum(), internet: sum(), cash: sum() };
+  const byAccAll   = { perso: sum(), commun: sum(), internet: sum(), cash: sum() };
 
   for (const m of movements) {
     const amt = Number(m.amount || 0);
+    const acc = m.account;
 
-    if (amt > 0) allTime.in += amt;
-    if (amt < 0) allTime.out += amt;
+    // global
+    if (amt > 0) allAll.in += amt;
+    if (amt < 0) allAll.out += amt;
+    if (byAccAll[acc]) {
+      if (amt > 0) byAccAll[acc].in += amt;
+      if (amt < 0) byAccAll[acc].out += amt;
+    }
 
+    // mois courant
     if (m.financialMonth === currentMonth) {
-      if (amt > 0) month.in += amt;
-      if (amt < 0) month.out += amt;
-
-      if (byAccount[m.account]) {
-        if (amt > 0) byAccount[m.account].in += amt;
-        if (amt < 0) byAccount[m.account].out += amt;
+      if (amt > 0) monthAll.in += amt;
+      if (amt < 0) monthAll.out += amt;
+      if (byAccMonth[acc]) {
+        if (amt > 0) byAccMonth[acc].in += amt;
+        if (amt < 0) byAccMonth[acc].out += amt;
       }
     }
   }
 
-  const pack = t => ({
-    in: t.in,
-    out: Math.abs(t.out),
-    net: t.in + t.out
-  });
-
-  const byAccPacked = {};
-  ['perso','commun','internet','cash'].forEach(k => {
-    byAccPacked[k] = pack(byAccount[k]);
-  });
+  const mapPack = o => {
+    const r = {};
+    Object.keys(o).forEach(k => r[k] = pack(o[k]));
+    return r;
+  };
 
   return {
     currentMonth,
-    month: pack(month),
-    all: pack(allTime),
-    byAccountMonth: byAccPacked
+    monthAll: pack(monthAll),
+    allAll: pack(allAll),
+    byAccMonth: mapPack(byAccMonth),
+    byAccAll: mapPack(byAccAll)
   };
 }
 
-function renderTotals(totals, t) {
-  const row = (label, v) =>
-    `<div style="display:flex;justify-content:space-between;gap:8px">
-      <span>${label}</span><b>${v}</b>
-     </div>`;
+function renderTotals(totalsEl, state, t) {
+  const acc = state.selectedAccount;
+  const label = acc === 'all'
+    ? 'Tous les comptes'
+    : acc.charAt(0).toUpperCase() + acc.slice(1);
 
-  totals.innerHTML = `
-    <div style="border:1px solid #2a2a2a;border-radius:14px;padding:12px;margin:10px 0;background:#0f0f0f;">
-      <strong>Mois courant (${t.currentMonth})</strong>
-      ${row('Entrées', eur(t.month.in))}
-      ${row('Sorties', eur(t.month.out))}
-      ${row(
-        'Net',
-        `<span style="color:${t.month.net < 0 ? '#ff6b6b' : '#6ee7b7'}">${eur(t.month.net)}</span>`
-      )}
-    </div>
+  const month = acc === 'all' ? t.monthAll : t.byAccMonth[acc];
+  const all   = acc === 'all' ? t.allAll   : t.byAccAll[acc];
 
-    <div style="border:1px solid #2a2a2a;border-radius:14px;padding:12px;margin:10px 0;background:#0f0f0f;">
-      <strong>Cumul global</strong>
-      ${row('Entrées', eur(t.all.in))}
-      ${row('Sorties', eur(t.all.out))}
-      ${row(
-        'Net',
-        `<span style="color:${t.all.net < 0 ? '#ff6b6b' : '#6ee7b7'}">${eur(t.all.net)}</span>`
-      )}
-    </div>
-
-    <div style="border:1px solid #2a2a2a;border-radius:14px;padding:12px;margin:10px 0;background:#0f0f0f;">
-      <strong>Par compte (mois courant)</strong>
-      ${['perso','commun','internet','cash'].map(k => {
-        const a = t.byAccountMonth[k];
-        return row(
-          k,
-          `${eur(a.in)} / ${eur(a.out)} → 
-           <span style="color:${a.net < 0 ? '#ff6b6b' : '#6ee7b7'}">${eur(a.net)}</span>`
-        );
-      }).join('')}
+  const card = (title, x, subtitle = '') => `
+    <div style="border:1px solid #2a2a2a;border-radius:14px;padding:10px;margin:8px 0;background:#0f0f0f;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;">
+        <strong>${title}</strong>
+        ${subtitle ? `<span class="muted" style="font-size:.9em;">${subtitle}</span>` : ''}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;">
+        <div style="text-align:center;">
+          <div class="muted" style="font-size:.8em;">Entrées</div>
+          <b>${eur(x.in)}</b>
+        </div>
+        <div style="text-align:center;">
+          <div class="muted" style="font-size:.8em;">Sorties</div>
+          <b>${eur(x.out)}</b>
+        </div>
+        <div style="text-align:center;">
+          <div class="muted" style="font-size:.8em;">Net</div>
+          <b style="color:${netColor(x.net)}">${eur(x.net)}</b>
+        </div>
+      </div>
     </div>
   `;
+
+  totalsEl.innerHTML = `
+    <div class="muted" style="margin:6px 0;">Contexte : <b>${label}</b></div>
+    ${card('Mois courant', month, t.currentMonth)}
+    ${card('Cumul global', all)}
+  `;
+}
+
+/* ==================== Menu par compte ==================== */
+
+function buildAccountMenu(state, onChange) {
+  const wrap = el('div', { class: 'account-menu' });
+  wrap.style.display = 'flex';
+  wrap.style.gap = '8px';
+  wrap.style.flexWrap = 'wrap';
+  wrap.style.margin = '10px 0';
+
+  const accounts = [
+    { value: 'all', label: 'Tous' },
+    { value: 'perso', label: 'Perso' },
+    { value: 'commun', label: 'Commun' },
+    { value: 'internet', label: 'Internet' },
+    { value: 'cash', label: 'Cash' }
+  ];
+
+  const mkBtn = (v, label) => {
+    const b = el('button', { type: 'button' }, label);
+    b.style.padding = '8px 10px';
+    b.style.borderRadius = '999px';
+    b.style.border = '1px solid #2a2a2a';
+    b.style.background = state.selectedAccount === v ? '#1a1a1a' : '#0f0f0f';
+    b.style.fontWeight = state.selectedAccount === v ? '800' : '600';
+    b.style.cursor = 'pointer';
+
+    b.addEventListener('click', () => {
+      state.selectedAccount = v;
+      refreshStyles();
+      onChange();
+    });
+    wrap.appendChild(b);
+    return b;
+  };
+
+  const buttons = accounts.map(a => mkBtn(a.value, a.label));
+
+  function refreshStyles() {
+    buttons.forEach((b, i) => {
+      const v = accounts[i].value;
+      b.style.background = state.selectedAccount === v ? '#1a1a1a' : '#0f0f0f';
+      b.style.fontWeight = state.selectedAccount === v ? '800' : '600';
+    });
+  }
+
+  wrap._refresh = refreshStyles;
+  return wrap;
 }
 
 /* ==================== UI ==================== */
@@ -138,21 +189,31 @@ export function initRecurrentUI() {
   const page = document.querySelector('.page[data-page="recurrent"]');
   if (!page || page.hidden) return;
 
+  // évite doublons
+  page.querySelector('.account-menu')?.remove();
+  page.querySelector('.recurrent-totals')?.remove();
+
   const container = page.querySelector('[data-recurrent]');
   if (!container) return;
-
   container.innerHTML = '';
 
-  /* ---------- Totaux ---------- */
-  const totals = el('div', { class: 'recurrent-totals' }, 'Chargement des totaux…');
+  const state = { selectedAccount: 'all' };
+
+  const menu = buildAccountMenu(state, async () => {
+    const t = await computeTotals();
+    renderTotals(totals, state, t);
+  });
+  page.insertBefore(menu, container);
+
+  const totals = el('div', { class: 'recurrent-totals' }, 'Chargement…');
   page.insertBefore(totals, container);
 
   (async () => {
     const t = await computeTotals();
-    renderTotals(totals, t);
+    renderTotals(totals, state, t);
   })();
 
-  /* ---------- Formulaire ---------- */
+  /* ---------- Formulaire & liste (inchangés) ---------- */
 
   const ACCOUNTS = [
     { value: 'perso', label: 'Compte perso' },
@@ -181,8 +242,6 @@ export function initRecurrentUI() {
   const hint = el('div', { class: 'muted' }, 'Astuce : le montant est stocké en dépense (valeur négative).');
 
   form.append(sAcc, iDay, iAmt, iCat, iLab, sPay, addBtn, hint);
-
-  /* ---------- Liste ---------- */
 
   const list = el('div', { class: 'recurrent-list' });
   container.append(form, list);
@@ -265,7 +324,7 @@ export function initRecurrentUI() {
     await add(STORES.RECURRING, tpl);
 
     const t = await computeTotals();
-    renderTotals(totals, t);
+    renderTotals(totals, state, t);
 
     iDay.value = '';
     iAmt.value = '';
