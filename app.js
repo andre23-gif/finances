@@ -15,7 +15,6 @@ if (storedVersion && storedVersion !== APP_VERSION) {
 
 
 import { initRouter } from './router.js';
-import { initRouter } from './router.js';
 import { openDB } from './db.js';
 import { initStatsUI } from './ui-stats.js';
 import { initArchivesUI } from './ui-archives.js';
