@@ -1,15 +1,17 @@
 // ui-recurrent.js
 import { add, put, del, all, STORES } from './db.js';
 
-/* ---------- Utils ---------- */
+/* ==================== Utils ==================== */
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function eur(value) {
-  const v = Number(value || 0);
-  return v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+function eur(v) {
+  return Number(v || 0).toLocaleString('fr-FR', {
+    style: 'currency',
+    currency: 'EUR'
+  });
 }
 
 function el(tag, attrs = {}, text = '') {
@@ -36,44 +38,101 @@ function uid() {
   return String(Date.now()) + '-' + Math.random().toString(16).slice(2);
 }
 
-/* ---------- Totaux ---------- */
+/* ==================== Totaux ==================== */
 
 async function computeTotals() {
   const movements = await all(STORES.MOVEMENTS);
   const currentMonth = todayISO().slice(0, 7);
 
   const sum = () => ({ in: 0, out: 0 });
+
   const month = sum();
   const allTime = sum();
+  const byAccount = {
+    perso: sum(),
+    commun: sum(),
+    internet: sum(),
+    cash: sum()
+  };
 
   for (const m of movements) {
     const amt = Number(m.amount || 0);
 
-    if (amt > 0) {
-      allTime.in += amt;
-      if (m.financialMonth === currentMonth) month.in += amt;
-    }
-    if (amt < 0) {
-      allTime.out += amt;
-      if (m.financialMonth === currentMonth) month.out += amt;
+    if (amt > 0) allTime.in += amt;
+    if (amt < 0) allTime.out += amt;
+
+    if (m.financialMonth === currentMonth) {
+      if (amt > 0) month.in += amt;
+      if (amt < 0) month.out += amt;
+
+      if (byAccount[m.account]) {
+        if (amt > 0) byAccount[m.account].in += amt;
+        if (amt < 0) byAccount[m.account].out += amt;
+      }
     }
   }
 
+  const pack = t => ({
+    in: t.in,
+    out: Math.abs(t.out),
+    net: t.in + t.out
+  });
+
+  const byAccPacked = {};
+  ['perso','commun','internet','cash'].forEach(k => {
+    byAccPacked[k] = pack(byAccount[k]);
+  });
+
   return {
-    month: {
-      in: month.in,
-      out: Math.abs(month.out),
-      net: month.in + month.out
-    },
-    all: {
-      in: allTime.in,
-      out: Math.abs(allTime.out),
-      net: allTime.in + allTime.out
-    }
+    currentMonth,
+    month: pack(month),
+    all: pack(allTime),
+    byAccountMonth: byAccPacked
   };
 }
 
-/* ---------- UI ---------- */
+function renderTotals(totals, t) {
+  const row = (label, v) =>
+    `<div style="display:flex;justify-content:space-between;gap:8px">
+      <span>${label}</span><b>${v}</b>
+     </div>`;
+
+  totals.innerHTML = `
+    <div style="border:1px solid #2a2a2a;border-radius:14px;padding:12px;margin:10px 0;background:#0f0f0f;">
+      <strong>Mois courant (${t.currentMonth})</strong>
+      ${row('Entrées', eur(t.month.in))}
+      ${row('Sorties', eur(t.month.out))}
+      ${row(
+        'Net',
+        `<span style="color:${t.month.net < 0 ? '#ff6b6b' : '#6ee7b7'}">${eur(t.month.net)}</span>`
+      )}
+    </div>
+
+    <div style="border:1px solid #2a2a2a;border-radius:14px;padding:12px;margin:10px 0;background:#0f0f0f;">
+      <strong>Cumul global</strong>
+      ${row('Entrées', eur(t.all.in))}
+      ${row('Sorties', eur(t.all.out))}
+      ${row(
+        'Net',
+        `<span style="color:${t.all.net < 0 ? '#ff6b6b' : '#6ee7b7'}">${eur(t.all.net)}</span>`
+      )}
+    </div>
+
+    <div style="border:1px solid #2a2a2a;border-radius:14px;padding:12px;margin:10px 0;background:#0f0f0f;">
+      <strong>Par compte (mois courant)</strong>
+      ${['perso','commun','internet','cash'].map(k => {
+        const a = t.byAccountMonth[k];
+        return row(
+          k,
+          `${eur(a.in)} / ${eur(a.out)} → 
+           <span style="color:${a.net < 0 ? '#ff6b6b' : '#6ee7b7'}">${eur(a.net)}</span>`
+        );
+      }).join('')}
+    </div>
+  `;
+}
+
+/* ==================== UI ==================== */
 
 export function initRecurrentUI() {
   const page = document.querySelector('.page[data-page="recurrent"]');
@@ -84,27 +143,13 @@ export function initRecurrentUI() {
 
   container.innerHTML = '';
 
-  /* ---------- Totaux en haut ---------- */
-  const totals = el('div', { class: 'recurrent-totals' });
-  totals.innerHTML = '<div class="muted">Chargement des totaux…</div>';
+  /* ---------- Totaux ---------- */
+  const totals = el('div', { class: 'recurrent-totals' }, 'Chargement des totaux…');
   page.insertBefore(totals, container);
 
   (async () => {
     const t = await computeTotals();
-    totals.innerHTML = `
-      <div class="totals-block">
-        <strong>Mois courant</strong>
-        <div>Entrées : ${eur(t.month.in)}</div>
-        <div>Sorties : ${eur(t.month.out)}</div>
-        <div><b>Net : ${eur(t.month.net)}</b></div>
-      </div>
-      <div class="totals-block">
-        <strong>Cumul global</strong>
-        <div>Entrées : ${eur(t.all.in)}</div>
-        <div>Sorties : ${eur(t.all.out)}</div>
-        <div><b>Net : ${eur(t.all.net)}</b></div>
-      </div>
-    `;
+    renderTotals(totals, t);
   })();
 
   /* ---------- Formulaire ---------- */
@@ -180,7 +225,6 @@ export function initRecurrentUI() {
           { class: 'btn-secondary', type: 'button' },
           item.active === false ? 'Activer' : 'Désactiver'
         );
-
         toggle.addEventListener('click', async () => {
           item.active = item.active === false ? true : false;
           await put(STORES.RECURRING, item);
@@ -219,6 +263,9 @@ export function initRecurrentUI() {
     };
 
     await add(STORES.RECURRING, tpl);
+
+    const t = await computeTotals();
+    renderTotals(totals, t);
 
     iDay.value = '';
     iAmt.value = '';
