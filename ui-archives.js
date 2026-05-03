@@ -2,9 +2,8 @@
 import { all, STORES } from './db.js';
 
 function eur(v) {
- })  return v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
-      .forEach(m => {
-        const row = document.createElement('div');
+  return v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+}
         row.className = 'archive-row';
 
         const label = m.label || '(sans libellé)';
