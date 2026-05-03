@@ -202,3 +202,10 @@ input:focus, select:focus, textarea:focus{
   overflow:hidden;
   background:linear-gradient(180deg, rgba(14,20,23,.92), rgba(14,20,23,.72));
   border:1px solid rgba(233,238,244,.12);
+
+  /* iOS: rendre les taps plus fiables */
+.nav-item, button, [role="button"], a {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
