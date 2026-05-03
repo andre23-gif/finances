@@ -119,7 +119,52 @@ header.appendChild(exportBtn);
         list.appendChild(row);
       });
   }
+importBtn.addEventListener('click', async () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
 
+  input.onchange = async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const imported = JSON.parse(text);
+
+      if (!Array.isArray(imported)) {
+        alert('Import refusé : le fichier doit contenir un tableau JSON.');
+        return;
+      }
+
+      // 1) Vider complètement le store MOVEMENTS
+      const existing = await all(STORES.MOVEMENTS);
+      for (const m of existing) {
+        await del(STORES.MOVEMENTS, m.id);
+      }
+
+      // 2) Réinsérer les mouvements importés
+      for (const m of imported) {
+        if (!m.id) {
+          alert('Import refusé : chaque mouvement doit avoir un champ "id".');
+          return;
+        }
+        await put(STORES.MOVEMENTS, m);
+      }
+
+      alert('Import JSON terminé (remplacement total).');
+
+      // 3) Rafraîchir la page Archives
+      initArchivesUI();
+
+    } catch (e) {
+      console.error(e);
+      alert('Erreur lors de la lecture du fichier JSON.');
+    }
+  };
+
+  input.click();
+});
   exportBtn.addEventListener('click', () => {
     const fm = select.value;
     const data = (fm === 'all') ? counted : counted.filter(m => m.financialMonth === fm);
