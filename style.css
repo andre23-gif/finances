@@ -1,38 +1,34 @@
-/* ================================
-   Suivi Financier — Noir / Argent / Vert
-   CSS "propre" : sans dépendance externe
-   ================================ */
+/* Suivi Financier — Vert / Argent / Noir (propre & lisible) */
 
 :root{
-  /* Base */
-  --bg:#07090b;                 /* noir profond */
-  --bg2:#0b0f12;                /* noir bleuté */
-  --panel:#0f1519;              /* cartes */
-  --panel2:#101a20;
-  --text:#e8edf2;               /* argent clair */
-  --text2:#c7d0da;              /* argent */
-  --muted:#93a1ad;              /* gris froid */
-  --border:rgba(232,237,242,.12);
-  --border2:rgba(116,255,172,.18);
+  /* Fond & surfaces */
+  --bg:#060809;
+  --bg2:#090e10;
+  --panel:#0e1417;
+  --panel2:#111a1f;
 
-  /* Accent vert */
-  --accent:#34ff93;
-  --accent2:#19c972;
-  --accentGlow:rgba(52,255,147,.22);
+  /* Texte (argent) */
+  --text:#e9eef4;
+  --text2:#c8d2dc;
+  --muted:#92a0ad;
 
-  /* États */
-  --neg:#ff5b74;
-  --pos:#39f2a1;
+  /* Vert (plus présent) */
+  --green:#29ff8a;
+  --green2:#12d36a;
+  --greenGlow:rgba(41,255,138,.28);
 
-  /* Rayons / ombres */
+  /* Bordures / ombres */
+  --border:rgba(233,238,244,.12);
+  --borderG:rgba(41,255,138,.28);
+  --shadow:0 16px 44px rgba(0,0,0,.55);
+  --shadow2:0 10px 28px rgba(0,0,0,.42);
+
   --radius:18px;
   --radius2:12px;
-  --shadow:0 14px 40px rgba(0,0,0,.55);
-  --shadow2:0 10px 26px rgba(0,0,0,.40);
 
-  /* Typo */
+  /* Typo “stylée” */
+  --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
 }
 
 *{ box-sizing:border-box; }
@@ -40,5 +36,169 @@ html,body{ height:100%; }
 html{ color-scheme:dark; }
 body{
   margin:0;
+  font-family:var(--sans);
+  font-size:14px;
+  line-height:1.5;
+  color:var(--text);
   background:
-    radial-gradient(900px 520px at 20% -10%, rgba(52,255,147,.14), transparent 55%),
+    radial-gradient(900px 520px at 18% -10%, rgba(41,255,138,.20), transparent 55%),
+    radial-gradient(900px 520px at 85% 0%, rgba(41,255,138,.12), transparent 55%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+
+/* Contrôles natifs (checkbox/range/progress) en vert */
+:root{ accent-color: var(--green); } /* [1](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/accent-color) */
+
+h1,h2,h3{ margin:0 0 .6rem 0; letter-spacing:.35px; }
+h1{ font-size:1.3rem; font-weight:760; letter-spacing:.8px; }
+h2{ font-size:1.08rem; font-weight:680; color:var(--text); }
+h3{ font-size:.98rem; font-weight:680; color:var(--text2); }
+
+.muted{ color:var(--muted); }
+.subhead{ margin-top:1.05rem; color:var(--text2); }
+
+#app{ max-width:1100px; margin:0 auto; padding:1rem; }
+.page{ padding:1rem 0; }
+
+/* Header */
+.header{
+  position:sticky;
+  top:0;
+  z-index:20;
+  padding:1rem;
+  background:linear-gradient(to bottom, rgba(6,8,9,.92), rgba(6,8,9,.60));
+  backdrop-filter: blur(10px);
+  border-bottom:1px solid var(--border);
+}
+.header h1{
+  max-width:1100px;
+  margin:0 auto;
+  padding:0 .25rem;
+  background:linear-gradient(90deg, #f7fbff 0%, #cbd6e0 40%, var(--green) 100%);
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
+  text-shadow:0 0 26px rgba(41,255,138,.18);
+}
+.header h1::after{
+  content:"";
+  display:block;
+  height:3px;
+  width:92px;
+  border-radius:999px;
+  margin-top:.45rem;
+  background:linear-gradient(90deg, var(--green), transparent);
+  box-shadow:0 0 18px rgba(41,255,138,.22);
+}
+
+/* Nav */
+.nav{
+  max-width:1100px;
+  margin:0 auto;
+  padding:.75rem 1rem;
+  display:flex;
+  flex-wrap:wrap;
+  gap:.55rem;
+  align-items:center;
+  border-bottom:1px solid var(--border);
+  background:
+    linear-gradient(180deg, rgba(6,8,9,.55), rgba(6,8,9,.35));
+  backdrop-filter: blur(10px);
+  position:relative;
+}
+.nav::after{
+  content:"";
+  position:absolute;
+  left:1rem; right:1rem; bottom:-1px;
+  height:1px;
+  background:linear-gradient(90deg, transparent, rgba(41,255,138,.40), transparent);
+}
+
+/* Pills */
+.nav-item{
+  appearance:none;
+  border:1px solid rgba(233,238,244,.14);
+  background:rgba(233,238,244,.04);
+  color:var(--text);
+  padding:.56rem .86rem;
+  border-radius:999px;
+  cursor:pointer;
+  transition:transform .08s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
+  font-weight:650;
+  letter-spacing:.25px;
+}
+.nav-item:hover{
+  background:rgba(233,238,244,.07);
+  border-color:rgba(233,238,244,.22);
+}
+.nav-item:active{ transform:translateY(1px); }
+.nav-item.active{
+  border-color:rgba(41,255,138,.65);
+  background:rgba(41,255,138,.14);
+  box-shadow:0 0 0 4px rgba(41,255,138,.12), 0 10px 28px rgba(18,211,106,.16);
+}
+
+/* Buttons */
+.btn-primary,.btn-secondary{
+  appearance:none;
+  border-radius:var(--radius2);
+  padding:.56rem .92rem;
+  cursor:pointer;
+  user-select:none;
+  font-weight:700;
+  letter-spacing:.2px;
+  border:1px solid var(--border);
+  transition:transform .08s ease, filter .15s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.btn-primary{
+  border-color:rgba(41,255,138,.65);
+  background:linear-gradient(135deg, rgba(41,255,138,.92), rgba(18,211,106,.78));
+  color:#04110a;
+  box-shadow:0 12px 30px rgba(18,211,106,.18), 0 0 26px rgba(41,255,138,.12);
+}
+.btn-primary:hover{ filter:brightness(1.04); }
+.btn-primary:active{ transform:translateY(1px); }
+.btn-secondary{
+  background:rgba(233,238,244,.05);
+  color:var(--text);
+}
+.btn-secondary:hover{
+  background:rgba(233,238,244,.085);
+  border-color:rgba(233,238,244,.22);
+}
+.btn-secondary:active{ transform:translateY(1px); }
+
+/* Inputs */
+input, select, textarea{
+  background:rgba(233,238,244,.04);
+  color:var(--text);
+  border:1px solid rgba(233,238,244,.14);
+  border-radius:12px;
+  padding:.55rem .72rem;
+  outline:none;
+}
+input:focus, select:focus, textarea:focus{
+  border-color:rgba(41,255,138,.65);
+  box-shadow:0 0 0 4px rgba(41,255,138,.12);
+}
+
+/* Etat — cards */
+.accounts{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:.95rem;
+}
+@media (max-width: 980px){
+  .accounts{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px){
+  .accounts{ grid-template-columns:1fr; }
+}
+
+.account-card{
+  position:relative;
+  overflow:hidden;
+  background:linear-gradient(180deg, rgba(14,20,23,.92), rgba(14,20,23,.72));
+  border:1px solid rgba(233,238,244,.12);
