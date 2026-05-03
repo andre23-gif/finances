@@ -21,7 +21,7 @@ import { initStatsUI } from './ui-stats.js';
 import { initArchivesUI } from './ui-archives.js';
 import { updateEtatUI } from './ui-etat.js';
 import { initRecurrentUI } from './ui-recurrent.js';
-
+import { initSaisieUI } from './ui-saisie.js';
 
 function currentRoute() {
   return (location.hash || '').replace('#', '') || 'etat';
@@ -80,5 +80,3 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
-
-import { initSaisieUI } from './ui-saisie.js';
