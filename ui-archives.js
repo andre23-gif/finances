@@ -1,6 +1,7 @@
 // ui-archives.js
 import { all, del, put, STORES } from './db.js';
 
+/* ---------- Utils ---------- */
 function eur(value) {
   const v = Number(value || 0);
   return v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
@@ -9,18 +10,16 @@ function eur(value) {
 function downloadJSON(filename, data) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
-
   document.body.appendChild(a);
   a.click();
-
   URL.revokeObjectURL(url);
   a.remove();
 }
 
+/* ---------- UI ---------- */
 export async function initArchivesUI() {
   const page = document.querySelector('.page[data-page="archives"]');
   if (!page || page.hidden) return;
@@ -29,15 +28,17 @@ export async function initArchivesUI() {
   if (!container) return;
 
   const movements = await all(STORES.MOVEMENTS);
-
   const counted = movements.filter(m =>
     !m.status || m.status === 'SAISIE_MANUELLE' || m.status === 'APPLIQUEE'
   );
 
-  const months = Array.from(new Set(counted.map(m => m.financialMonth).filter(Boolean))).sort();
+  const months = Array.from(
+    new Set(counted.map(m => m.financialMonth).filter(Boolean))
+  ).sort();
 
   container.innerHTML = '';
 
+  /* ---------- Header ---------- */
   const header = document.createElement('div');
   header.className = 'archives-header';
 
@@ -56,19 +57,19 @@ export async function initArchivesUI() {
     select.appendChild(o);
   }
 
+  const importBtn = document.createElement('button');
+  importBtn.className = 'btn-secondary';
+  importBtn.type = 'button';
+  importBtn.textContent = 'Importer JSON';
+
   const exportBtn = document.createElement('button');
   exportBtn.className = 'btn-primary';
   exportBtn.type = 'button';
   exportBtn.textContent = 'Exporter JSON';
 
-const importBtn = document.createElement('button');
-importBtn.className = 'btn-secondary';
-importBtn.type = 'button';
-importBtn.textContent = 'Importer JSON';
-
-header.appendChild(select);
-header.appendChild(importBtn);
-header.appendChild(exportBtn);
+  header.appendChild(select);
+  header.appendChild(importBtn);
+  header.appendChild(exportBtn);
 
   const list = document.createElement('div');
   list.className = 'archives-list';
@@ -76,10 +77,10 @@ header.appendChild(exportBtn);
   container.appendChild(header);
   container.appendChild(list);
 
+  /* ---------- Render ---------- */
   function render() {
     list.innerHTML = '';
     const fm = select.value;
-
     const data = (fm === 'all') ? counted : counted.filter(m => m.financialMonth === fm);
 
     if (!data.length) {
@@ -105,67 +106,76 @@ header.appendChild(exportBtn);
         const amt = Number(m.amount || 0);
 
         row.innerHTML = `
-  <div class="ar-main">
-    <span class="ar-date">${date}</span>
-    <span class="ar-label">${label}</span>
-    <span class="ar-cat">${cat}</span>
-  </div>
-  <div class="ar-side">
-    <span class="ar-acc">${acc}</span>
-    <span class="ar-amt ${amt < 0 ? 'neg' : 'pos'}">${eur(amt)}</span>
-    <button class="ar-del" type="button" title="Supprimer">❌</button>
-  </div>
-`;
+          <div class="ar-main">
+            <span class="ar-date">${date}</span>
+            <span class="ar-label">${label}</span>
+            <span class="ar-cat">${cat}</span>
+          </div>
+          <div class="ar-side">
+            <span class="ar-acc">${acc}</span>
+            <span class="ar-amt ${amt < 0 ? 'neg' : 'pos'}">${eur(amt)}</span>
+            <button class="ar-del" type="button" title="Supprimer">❌</button>
+          </div>
+        `;
+
+        // Suppression ❌
+        row.querySelector('.ar-del').addEventListener('click', async () => {
+          const ok = confirm('Supprimer cette saisie ?');
+          if (!ok) return;
+          await del(STORES.MOVEMENTS, m.id);
+          initArchivesUI();
+        });
 
         list.appendChild(row);
       });
   }
-importBtn.addEventListener('click', async () => {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.json';
 
-  input.onchange = async () => {
-    const file = input.files && input.files[0];
-    if (!file) return;
+  /* ---------- Import (remplacement total) ---------- */
+  importBtn.addEventListener('click', async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
 
-    try {
-      const text = await file.text();
-      const imported = JSON.parse(text);
+    input.onchange = async () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
 
-      if (!Array.isArray(imported)) {
-        alert('Import refusé : le fichier doit contenir un tableau JSON.');
-        return;
-      }
+      try {
+        const text = await file.text();
+        const imported = JSON.parse(text);
 
-      // 1) Vider complètement le store MOVEMENTS
-      const existing = await all(STORES.MOVEMENTS);
-      for (const m of existing) {
-        await del(STORES.MOVEMENTS, m.id);
-      }
-
-      // 2) Réinsérer les mouvements importés
-      for (const m of imported) {
-        if (!m.id) {
-          alert('Import refusé : chaque mouvement doit avoir un champ "id".');
+        if (!Array.isArray(imported)) {
+          alert('Import refusé : le fichier doit contenir un tableau JSON.');
           return;
         }
-        await put(STORES.MOVEMENTS, m);
+
+        // Vider totalement le store
+        const existing = await all(STORES.MOVEMENTS);
+        for (const m of existing) {
+          await del(STORES.MOVEMENTS, m.id);
+        }
+
+        // Réinsérer
+        for (const m of imported) {
+          if (!m.id) {
+            alert('Import refusé : chaque mouvement doit avoir un id.');
+            return;
+          }
+          await put(STORES.MOVEMENTS, m);
+        }
+
+        alert('Import JSON terminé (remplacement total).');
+        initArchivesUI();
+      } catch (e) {
+        console.error(e);
+        alert('Erreur lors de l’import du fichier JSON.');
       }
+    };
 
-      alert('Import JSON terminé (remplacement total).');
+    input.click();
+  });
 
-      // 3) Rafraîchir la page Archives
-      initArchivesUI();
-
-    } catch (e) {
-      console.error(e);
-      alert('Erreur lors de la lecture du fichier JSON.');
-    }
-  };
-
-  input.click();
-});
+  /* ---------- Export ---------- */
   exportBtn.addEventListener('click', () => {
     const fm = select.value;
     const data = (fm === 'all') ? counted : counted.filter(m => m.financialMonth === fm);
