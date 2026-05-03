@@ -4,6 +4,8 @@ import { openDB } from './db.js';
 import { initStatsUI } from './ui-stats.js';
 import { initArchivesUI } from './ui-archives.js';
 import { updateEtatUI } from './ui-etat.js';
+import { initRecurrentUI } from './ui-recurrent.js';
+
 
 function currentRoute() {
   return (location.hash || '').replace('#', '') || 'etat';
