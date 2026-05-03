@@ -1,4 +1,20 @@
 // app.js
+// ==================== VERSION APP (anti-cache iOS Safari) ====================
+const APP_VERSION = '2026.05.03'; // ⬅️ change à CHAQUE déploiement
+
+const storedVersion = localStorage.getItem('APP_VERSION');
+
+if (storedVersion && storedVersion !== APP_VERSION) {
+  console.log('[App] Nouvelle version détectée, rechargement forcé');
+  localStorage.setItem('APP_VERSION', APP_VERSION);
+  window.location.reload(true); // force reload sans cache (clé iOS)
+} else if (!storedVersion) {
+  localStorage.setItem('APP_VERSION', APP_VERSION);
+}
+// ============================================================================
+
+
+import { initRouter } from './router.js';
 import { initRouter } from './router.js';
 import { openDB } from './db.js';
 import { initStatsUI } from './ui-stats.js';
