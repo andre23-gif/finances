@@ -1,5 +1,5 @@
 // ui-archives.js
-import { all, STORES } from './db.js';
+import { all, del, put, STORES } from './db.js';
 
 function eur(value) {
   const v = Number(value || 0);
@@ -116,7 +116,6 @@ header.appendChild(exportBtn);
     <button class="ar-del" type="button" title="Supprimer">❌</button>
   </div>
 `;
-        `;
 
         list.appendChild(row);
       });
