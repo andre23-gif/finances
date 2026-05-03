@@ -1,5 +1,8 @@
 // ui-saisie.js
 import { addMovementWithTriggers } from './engine.js';
+import { all, STORES } from './db.js';
+
+/* ---------- Constantes ---------- */
 
 const ACCOUNTS = [
   { value: 'perso', label: 'Perso' },
@@ -14,6 +17,8 @@ const PAYMENTS = [
   { value: 'card', label: '💳 Carte' },
   { value: 'check', label: '🧾 Chèque' }
 ];
+
+/* ---------- Utils ---------- */
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -37,19 +42,26 @@ function select(options, value) {
 }
 
 function input(type, placeholder, extra = {}) {
-  const i = el('input', { type, placeholder, ...extra });
-  return i;
+  return el('input', { type, placeholder, ...extra });
 }
+
+/* ---------- Tables ---------- */
 
 function buildTable(container, kind) {
   const table = el('table', { class: 'data-table' });
   const thead = el('thead');
   const trh = el('tr');
-  ['Date', 'Compte', 'Montant', 'Famille', 'Précision', 'Paiement', ''].forEach(h => trh.appendChild(el('th', {}, h)));
+
+  ['Date', 'Compte', 'Montant', 'Famille', 'Précision', 'Paiement', ''].forEach(h =>
+    trh.appendChild(el('th', {}, h))
+  );
+
   thead.appendChild(trh);
   const tbody = el('tbody');
+
   table.appendChild(thead);
   table.appendChild(tbody);
+
   container.innerHTML = '';
   container.appendChild(table);
 
@@ -67,38 +79,26 @@ function addRow(tbody, kind) {
   tdDate.appendChild(iDate);
 
   const tdAcc = el('td');
-  const sAcc = select(ACCOUNTS, 'perso');
-  tdAcc.appendChild(sAcc);
+  tdAcc.appendChild(select(ACCOUNTS, 'perso'));
 
   const tdAmt = el('td');
-  const iAmt = input('number', '0.00', { step: '0.01' });
-  tdAmt.appendChild(iAmt);
+  tdAmt.appendChild(input('number', '0.00', { step: '0.01' }));
 
   const tdCat = el('td');
-  const iCat = input('text', 'Famille');
-  tdCat.appendChild(iCat);
+  tdCat.appendChild(input('text', 'Famille'));
 
   const tdLab = el('td');
-  const iLab = input('text', 'Précision');
-  tdLab.appendChild(iLab);
+  tdLab.appendChild(input('text', 'Précision'));
 
   const tdPay = el('td');
-  const sPay = select(PAYMENTS, 'card');
-  tdPay.appendChild(sPay);
+  tdPay.appendChild(select(PAYMENTS, 'card'));
 
   const tdDel = el('td');
   const delBtn = el('button', { class: 'icon-btn', type: 'button', title: 'Supprimer' }, '✕');
   delBtn.addEventListener('click', () => tr.remove());
   tdDel.appendChild(delBtn);
 
-  tr.appendChild(tdDate);
-  tr.appendChild(tdAcc);
-  tr.appendChild(tdAmt);
-  tr.appendChild(tdCat);
-  tr.appendChild(tdLab);
-  tr.appendChild(tdPay);
-  tr.appendChild(tdDel);
-
+  tr.append(tdDate, tdAcc, tdAmt, tdCat, tdLab, tdPay, tdDel);
   tbody.appendChild(tr);
 }
 
@@ -113,11 +113,10 @@ function readRows(tbody, kind) {
     const amountNum = Number(amountRaw);
     if (!date || !account || !amountNum) continue;
 
-    const cat = (category || '').trim();
-    const lab = (label || '').trim();
-
     let type = (kind === 'expense') ? 'DEPENSE' : 'ENTREE';
-    if (kind === 'income' && cat.toLowerCase() === 'salaire') type = 'SALAIRE';
+    if (kind === 'income' && (category || '').toLowerCase() === 'salaire') {
+      type = 'SALAIRE';
+    }
 
     const amount = (type === 'DEPENSE') ? -Math.abs(amountNum) : Math.abs(amountNum);
 
@@ -127,8 +126,8 @@ function readRows(tbody, kind) {
       amount,
       type,
       status: 'SAISIE_MANUELLE',
-      category: cat,
-      label: lab,
+      category: (category || '').trim(),
+      label: (label || '').trim(),
       paymentMethod
     });
   }
@@ -136,10 +135,61 @@ function readRows(tbody, kind) {
   return result;
 }
 
+/* ---------- Totaux ---------- */
+
+async function computeTotals() {
+  const movements = await all(STORES.MOVEMENTS);
+
+  // Mois budgétaire "logique" = aujourd'hui (engine applique déjà la règle SALAIRE → mois suivant)
+  const currentMonth = todayISO().slice(0, 7);
+
+  const sum = () => ({ in: 0, out: 0 });
+
+  const month = sum();
+  const allTime = sum();
+
+  for (const m of movements) {
+    const amt = Number(m.amount || 0);
+
+    if (amt > 0) {
+      allTime.in += amt;
+      if (m.financialMonth === currentMonth) month.in += amt;
+    }
+    if (amt < 0) {
+      allTime.out += amt;
+      if (m.financialMonth === currentMonth) month.out += amt;
+    }
+  }
+
+  return {
+    month: {
+      in: month.in,
+      out: Math.abs(month.out),
+      net: month.in + month.out
+    },
+    all: {
+      in: allTime.in,
+      out: Math.abs(allTime.out),
+      net: allTime.in + allTime.out
+    }
+  };
+}
+
+/* ---------- UI ---------- */
+
 export function initSaisieUI() {
   const page = document.querySelector('.page[data-page="saisie"]');
   if (!page) return;
 
+  /* Totaux en haut */
+  const totals = document.createElement('div');
+  totals.className = 'saisie-totals';
+  totals.innerHTML = '<div class="muted">Chargement des totaux…</div>';
+
+  const toolbar = page.querySelector('.saisie-toolbar');
+  page.insertBefore(totals, toolbar);
+
+  /* Tables */
   const expContainer = page.querySelector('[data-expenses]');
   const incContainer = page.querySelector('[data-incomes]');
   if (!expContainer || !incContainer) return;
@@ -147,21 +197,45 @@ export function initSaisieUI() {
   const expBody = buildTable(expContainer, 'expense');
   const incBody = buildTable(incContainer, 'income');
 
-  page.querySelector('[data-add-expense]')?.addEventListener('click', () => addRow(expBody, 'expense'));
-  page.querySelector('[data-add-income]')?.addEventListener('click', () => addRow(incBody, 'income'));
+  /* Totaux DB */
+  (async () => {
+    const t = await computeTotals();
+    totals.innerHTML = `
+      <div class="totals-block">
+        <strong>Mois courant</strong>
+        <div>Entrées : ${t.month.in.toFixed(2)} €</div>
+        <div>Sorties : ${t.month.out.toFixed(2)} €</div>
+        <div><b>Net : ${t.month.net.toFixed(2)} €</b></div>
+      </div>
+      <div class="totals-block">
+        <strong>Cumul global</strong>
+        <div>Entrées : ${t.all.in.toFixed(2)} €</div>
+        <div>Sorties : ${t.all.out.toFixed(2)} €</div>
+        <div><b>Net : ${t.all.net.toFixed(2)} €</b></div>
+      </div>
+    `;
+  })();
+
+  /* Actions */
+  page.querySelector('[data-add-expense]')?.addEventListener('click', () =>
+    addRow(expBody, 'expense')
+  );
+
+  page.querySelector('[data-add-income]')?.addEventListener('click', () =>
+    addRow(incBody, 'income')
+  );
 
   page.querySelector('[data-save-all]')?.addEventListener('click', async () => {
     const movements = [
       ...readRows(expBody, 'expense'),
       ...readRows(incBody, 'income')
     ];
-    if (movements.length === 0) return;
+    if (!movements.length) return;
 
     for (const m of movements) {
       await addMovementWithTriggers(m);
     }
 
-    // reset
     expBody.innerHTML = '';
     incBody.innerHTML = '';
     addRow(expBody, 'expense');
