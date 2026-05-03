@@ -1,4 +1,5 @@
-// router.jsetat';
+// router.js
+const DEFAULT_ROUTE = 'etat';
 
 function getRoute() {
   return (location.hash || '').replace('#', '') || DEFAULT_ROUTE;
