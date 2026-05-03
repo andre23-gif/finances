@@ -2,7 +2,7 @@
 import { addMovementWithTriggers } from './engine.js';
 import { all, STORES } from './db.js';
 
-/* ---------- Constantes ---------- */
+/* ==================== Constantes ==================== */
 
 const ACCOUNTS = [
   { value: 'perso', label: 'Perso' },
@@ -18,7 +18,7 @@ const PAYMENTS = [
   { value: 'check', label: '🧾 Chèque' }
 ];
 
-/* ---------- Utils ---------- */
+/* ==================== Utils ==================== */
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -45,7 +45,7 @@ function input(type, placeholder, extra = {}) {
   return el('input', { type, placeholder, ...extra });
 }
 
-/* ---------- Tables ---------- */
+/* ==================== Tables ==================== */
 
 function buildTable(container, kind) {
   const table = el('table', { class: 'data-table' });
@@ -58,7 +58,6 @@ function buildTable(container, kind) {
 
   thead.appendChild(trh);
   const tbody = el('tbody');
-
   table.appendChild(thead);
   table.appendChild(tbody);
 
@@ -135,58 +134,50 @@ function readRows(tbody, kind) {
   return result;
 }
 
-/* ---------- Totaux ---------- */
+/* ==================== Totaux ==================== */
 
 async function computeTotals() {
   const movements = await all(STORES.MOVEMENTS);
-
-  // Mois budgétaire courant (cohérent avec le moteur : financialMonth est déjà écrit en base)
   const currentMonth = todayISO().slice(0, 7);
 
   const sum = () => ({ in: 0, out: 0 });
+
   const month = sum();
   const allTime = sum();
-
-  // Totaux par compte (mois courant)
   const byAccount = {
     perso: sum(),
-    internet: sum(),
     commun: sum(),
+    internet: sum(),
     cash: sum()
   };
 
   for (const m of movements) {
     const amt = Number(m.amount || 0);
-    const fm = m.financialMonth;
-    const acc = m.account;
 
-    // Global
     if (amt > 0) allTime.in += amt;
     if (amt < 0) allTime.out += amt;
 
-    // Mois courant
-    if (fm === currentMonth) {
+    if (m.financialMonth === currentMonth) {
       if (amt > 0) month.in += amt;
       if (amt < 0) month.out += amt;
 
-      // Par compte (mois courant)
-      if (byAccount[acc]) {
-        if (amt > 0) byAccount[acc].in += amt;
-        if (amt < 0) byAccount[acc].out += amt;
+      if (byAccount[m.account]) {
+        if (amt > 0) byAccount[m.account].in += amt;
+        if (amt < 0) byAccount[m.account].out += amt;
       }
     }
   }
 
-  const pack = (t) => ({
+  const pack = t => ({
     in: t.in,
     out: Math.abs(t.out),
     net: t.in + t.out
   });
 
   const byAccPacked = {};
-  for (const [k, v] of Object.entries(byAccount)) {
-    byAccPacked[k] = pack(v);
-  }
+  ['perso', 'commun', 'internet', 'cash'].forEach(k => {
+    byAccPacked[k] = pack(byAccount[k]);
+  });
 
   return {
     currentMonth,
@@ -196,21 +187,46 @@ async function computeTotals() {
   };
 }
 
-/* ---------- UI ---------- */
+function renderTotals(totals, t) {
+  const row = (label, v) =>
+    `<div style="display:flex;justify-content:space-between"><span>${label}</span><b>${v}</b></div>`;
+
+  totals.innerHTML = `
+    <div style="border:1px solid #2a2a2a;border-radius:14px;padding:12px;margin:10px 0;background:#0f0f0f;">
+      <strong>Mois courant (${t.currentMonth})</strong>
+      ${row('Entrées', t.month.in.toFixed(2) + ' €')}
+      ${row('Sorties', t.month.out.toFixed(2) + ' €')}
+      ${row('Net', '<span style="color:' + (t.month.net < 0 ? '#ff6b6b' : '#6ee7b7') + '">' + t.month.net.toFixed(2) + ' €</span>')}
+    </div>
+
+    <div style="border:1px solid #2a2a2a;border-radius:14px;padding:12px;margin:10px 0;background:#0f0f0f;">
+      <strong>Cumul global</strong>
+      ${row('Entrées', t.all.in.toFixed(2) + ' €')}
+      ${row('Sorties', t.all.out.toFixed(2) + ' €')}
+      ${row('Net', '<span style="color:' + (t.all.net < 0 ? '#ff6b6b' : '#6ee7b7') + '">' + t.all.net.toFixed(2) + ' €</span>')}
+    </div>
+
+    <div style="border:1px solid #2a2a2a;border-radius:14px;padding:12px;margin:10px 0;background:#0f0f0f;">
+      <strong>Par compte (mois courant)</strong>
+      ${['perso','commun','internet','cash'].map(k => {
+        const a = t.byAccountMonth[k];
+        return row(k, a.in.toFixed(2) + ' / ' + a.out.toFixed(2) + ' → <b style="color:' +
+          (a.net < 0 ? '#ff6b6b' : '#6ee7b7') + '">' + a.net.toFixed(2) + ' €</b>');
+      }).join('')}
+    </div>
+  `;
+}
+
+/* ==================== UI ==================== */
 
 export function initSaisieUI() {
   const page = document.querySelector('.page[data-page="saisie"]');
   if (!page) return;
 
-  /* Totaux en haut */
-  const totals = document.createElement('div');
-  totals.className = 'saisie-totals';
-  totals.innerHTML = '<div class="muted">Chargement des totaux…</div>';
-
+  const totals = el('div', { class: 'saisie-totals' }, 'Chargement des totaux…');
   const toolbar = page.querySelector('.saisie-toolbar');
   page.insertBefore(totals, toolbar);
 
-  /* Tables */
   const expContainer = page.querySelector('[data-expenses]');
   const incContainer = page.querySelector('[data-incomes]');
   if (!expContainer || !incContainer) return;
@@ -218,33 +234,13 @@ export function initSaisieUI() {
   const expBody = buildTable(expContainer, 'expense');
   const incBody = buildTable(incContainer, 'income');
 
-  /* Totaux DB */
   (async () => {
     const t = await computeTotals();
-    totals.innerHTML = `
-      <div class="totals-block">
-        <strong>Mois courant</strong>
-        <div>Entrées : ${t.month.in.toFixed(2)} €</div>
-        <div>Sorties : ${t.month.out.toFixed(2)} €</div>
-        <div><b>Net : ${t.month.net.toFixed(2)} €</b></div>
-      </div>
-      <div class="totals-block">
-        <strong>Cumul global</strong>
-        <div>Entrées : ${t.all.in.toFixed(2)} €</div>
-        <div>Sorties : ${t.all.out.toFixed(2)} €</div>
-        <div><b>Net : ${t.all.net.toFixed(2)} €</b></div>
-      </div>
-    `;
+    renderTotals(totals, t);
   })();
 
-  /* Actions */
-  page.querySelector('[data-add-expense]')?.addEventListener('click', () =>
-    addRow(expBody, 'expense')
-  );
-
-  page.querySelector('[data-add-income]')?.addEventListener('click', () =>
-    addRow(incBody, 'income')
-  );
+  page.querySelector('[data-add-expense]')?.addEventListener('click', () => addRow(expBody, 'expense'));
+  page.querySelector('[data-add-income]')?.addEventListener('click', () => addRow(incBody, 'income'));
 
   page.querySelector('[data-save-all]')?.addEventListener('click', async () => {
     const movements = [
@@ -256,6 +252,9 @@ export function initSaisieUI() {
     for (const m of movements) {
       await addMovementWithTriggers(m);
     }
+
+    const t = await computeTotals();
+    renderTotals(totals, t);
 
     expBody.innerHTML = '';
     incBody.innerHTML = '';
