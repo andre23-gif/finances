@@ -34,7 +34,7 @@ let income = 0;
 let expense = 0;
 
 // Nouveaux calculs
-let currentBalance = 0; // solde réel logique (présent)
+let currentBalance = 0; // solde réel logique
 let futureExpense = 0;  // dépenses à venir
 
 const today = new Date().toISOString().slice(0, 10);
@@ -58,9 +58,7 @@ ms.forEach(m => {
 
 
 box.innerHTML = `
-  <div class="kpi">
-    <strong>État du mois</strong>
-  </div>
+  <div class="kpi"><strong>État du mois</strong></div>
 
   <div class="kpi">
     Solde actuel :
@@ -82,4 +80,5 @@ box.innerHTML = `
     Mois budgétaire : ${fm}
   </div>
 `;
+
 ``
