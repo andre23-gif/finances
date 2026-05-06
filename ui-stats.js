@@ -10,20 +10,112 @@ function eur(v) {
   });
 }
 
-function el(tag, cls = '', html = '') {
+function el(tag, attrs = {}, html = '') {
   const n = document.createElement(tag);
-  if (cls) n.className = cls;
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') n.className = v;
+    else n.setAttribute(k, v);
+  }
   if (html) n.innerHTML = html;
   return n;
 }
 
-function bar(value, max, color) {
-  const pct = max > 0 ? Math.round((Math.abs(value) / max) * 100) : 0;
-  return `
-    <div style="height:8px;background:#1a1a1a;border-radius:6px;overflow:hidden;margin-top:4px;">
-      <div style="height:100%;width:${pct}%;background:${color};"></div>
-    </div>
+/* ==================== Agrégations ==================== */
+
+function aggregate(movements, { account, category, months }) {
+  const byMonth = {};
+  const byCategory = {};
+
+  movements.forEach(m => {
+    if (account !== 'all' && m.account !== account) return;
+    if (category !== 'all' && m.category !== category) return;
+    if (months && !months.includes(m.financialMonth)) return;
+
+    const amt = Number(m.amount || 0);
+    const fm = m.financialMonth;
+
+    if (!byMonth[fm]) byMonth[fm] = { in: 0, out: 0 };
+    if (amt > 0) byMonth[fm].in += amt;
+    if (amt < 0) byMonth[fm].out += Math.abs(amt);
+
+    if (amt < 0) {
+      const cat = (m.category || 'Sans catégorie').trim();
+      byCategory[cat] = (byCategory[cat] || 0) + Math.abs(amt);
+    }
+  });
+
+  return { byMonth, byCategory };
+}
+
+/* ==================== Graphiques ==================== */
+
+function renderPie(container, byCategory, onSelect) {
+  const total = Object.values(byCategory).reduce((a,b) => a+b, 0);
+  if (!total) {
+    container.innerHTML = '<div class="muted">Aucune dépense.</div>';
+    return;
+  }
+
+  let start = 0;
+  const colors = ['#ff6b6b','#feca57','#54a0ff','#1dd1a1','#5f27cd','#c8d6e5'];
+
+  const slices = Object.entries(byCategory).map(([cat,val], i) => {
+    const pct = val / total;
+    const a0 = start * 2 * Math.PI;
+    const a1 = (start + pct) * 2 * Math.PI;
+    start += pct;
+
+    const x0 = Math.cos(a0), y0 = Math.sin(a0);
+    const x1 = Math.cos(a1), y1 = Math.sin(a1);
+    const large = pct > 0.5 ? 1 : 0;
+
+    return `
+      <path d="
+        M 0 0
+        L ${x0} ${y0}
+        A 1 1 0 ${large} 1 ${x1} ${y1}
+        Z"
+        fill="${colors[i % colors.length]}"
+        data-cat="${cat}"
+      />
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <svg viewBox="-1.1 -1.1 2.2 2.2" style="width:220px;height:220px;">
+      ${slices}
+    </svg>
+    <div class="muted">Cliquer une famille pour filtrer</div>
   `;
+
+  container.querySelectorAll('path').forEach(p => {
+    p.style.cursor = 'pointer';
+    p.addEventListener('click', () => onSelect(p.dataset.cat));
+  });
+}
+
+function renderLines(container, months, byMonth) {
+  const max = Math.max(...months.map(m => {
+    const t = byMonth[m] || { in:0,out:0 };
+    return Math.max(t.in, t.out);
+  }));
+
+  container.innerHTML = months.map(m => {
+    const t = byMonth[m] || { in:0,out:0 };
+    return `
+      <div style="margin:6px 0;">
+        <strong>${m}</strong>
+        <div>Dépenses : ${eur(t.out)}</div>
+        <div style="height:6px;background:#1a1a1a;border-radius:4px;">
+          <div style="width:${(t.out/max)*100}%;height:100%;background:#ff6b6b;"></div>
+        </div>
+        <div>Recettes : ${eur(t.in)}</div>
+        <div style="height:6px;background:#1a1a1a;border-radius:4px;">
+          <div style="width:${(t.in/max)*100}%;height:100%;background:#1dd1a1;"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 /* ==================== UI ==================== */
@@ -38,135 +130,79 @@ export async function initStatsUI() {
   const movements = (await all(STORES.MOVEMENTS))
     .filter(m => m.status === 'SAISIE_MANUELLE' || m.status === 'APPLIQUEE');
 
-  container.innerHTML = '';
-
   if (!movements.length) {
     container.innerHTML = '<div class="muted">Aucune donnée.</div>';
     return;
   }
 
-  const months = Array.from(
-    new Set(movements.map(m => m.financialMonth).filter(Boolean))
+  const allMonths = Array.from(
+    new Set(movements.map(m => m.financialMonth))
   ).sort();
 
-  /* ---------- Sélecteur ---------- */
+  const state = {
+    account: 'all',
+    category: 'all',
+    period: 6
+  };
 
-  const select = document.createElement('select');
-  select.style.marginBottom = '10px';
-  select.style.width = '100%';
-  months.forEach(m => {
-    const o = document.createElement('option');
-    o.value = m;
-    o.textContent = m;
-    select.appendChild(o);
-  });
-  select.value = months[months.length - 1];
+  container.innerHTML = '';
 
-  container.appendChild(select);
+  /* ---------- Filtres ---------- */
 
-  /* ---------- Blocs ---------- */
+  const filters = el('div', {}, `
+    <select data-filter="account">
+      <option value="all">Tous les comptes</option>
+      <option value="perso">Perso</option>
+      <option value="commun">Commun</option>
+      <option value="internet">Internet</option>
+      <option value="cash">Cash</option>
+    </select>
 
-  const summary = el('div');
-  const timeline = el('div');
-  const accounts = el('div');
+    <select data-filter="category">
+      <option value="all">Toutes les familles</option>
+    </select>
 
-  container.append(summary, timeline, accounts);
+    <select data-filter="period">
+      <option value="3">3 mois</option>
+      <option value="6" selected>6 mois</option>
+      <option value="12">12 mois</option>
+    </select>
+  `);
+
+  const pie = el('div');
+  const lines = el('div');
+
+  container.append(filters, pie, lines);
 
   /* ---------- Render ---------- */
 
   function render() {
-    const fm = select.value;
+    const months = allMonths.slice(-state.period);
+    const { byMonth, byCategory } = aggregate(movements, {
+      account: state.account,
+      category: state.category,
+      months
+    });
 
-    const byMonth = {};
-    const byAccount = {};
+    // Remplir familles
+    const catSelect = filters.querySelector('[data-filter="category"]');
+    catSelect.innerHTML = `<option value="all">Toutes les familles</option>` +
+      Object.keys(byCategory).map(c => `<option value="${c}">${c}</option>`).join('');
+    catSelect.value = state.category;
 
-    for (const m of movements) {
-      const amt = Number(m.amount || 0);
-      const mo = m.financialMonth;
+    renderPie(pie, byCategory, cat => {
+      state.category = cat;
+      render();
+    });
 
-      if (!byMonth[mo]) byMonth[mo] = { in: 0, out: 0 };
-      if (amt > 0) byMonth[mo].in += amt;
-      if (amt < 0) byMonth[mo].out += Math.abs(amt);
-
-      if (amt < 0) {
-        byAccount[m.account] = (byAccount[m.account] || 0) + Math.abs(amt);
-      }
-    }
-
-    const cur = byMonth[fm] || { in: 0, out: 0 };
-    const maxIO = Math.max(cur.in, cur.out);
-    const net = cur.in - cur.out;
-
-    /* ----- 1. Synthèse ----- */
-
-    summary.innerHTML = `
-      <div style="border:1px solid #2a2a2a;border-radius:14px;padding:12px;margin:10px 0;">
-        <strong>Mois ${fm}</strong>
-        <div style="margin-top:6px;">
-          <div>Entrées : <b>${eur(cur.in)}</b></div>
-          ${bar(cur.in, maxIO, '#6ee7b7')}
-        </div>
-        <div style="margin-top:6px;">
-          <div>Sorties : <b>${eur(cur.out)}</b></div>
-          ${bar(cur.out, maxIO, '#ffb86c')}
-        </div>
-        <div style="margin-top:6px;">
-          Net :
-          <b style="color:${net < 0 ? '#ff6b6b' : '#6ee7b7'}">${eur(net)}</b>
-        </div>
-      </div>
-    `;
-
-    /* ----- 2. Timeline ----- */
-
-    const maxNet = Math.max(...Object.values(byMonth).map(m => Math.abs(m.in - m.out)));
-
-    timeline.innerHTML = `
-      <div style="border:1px solid #2a2a2a;border-radius:14px;padding:12px;margin:10px 0;">
-        <strong>Timeline mensuelle</strong>
-        ${
-          months.map(m => {
-            const t = byMonth[m];
-            if (!t) return '';
-            const n = t.in - t.out;
-            return `
-              <div style="margin-top:6px;">
-                <div style="display:flex;justify-content:space-between;">
-                  <span>${m}</span>
-                  <b style="color:${n < 0 ? '#ff6b6b' : '#6ee7b7'}">${eur(n)}</b>
-                </div>
-                ${bar(n, maxNet, n < 0 ? '#ff6b6b' : '#6ee7b7')}
-              </div>
-            `;
-          }).join('')
-        }
-      </div>
-    `;
-
-    /* ----- 3. Par compte ----- */
-
-    const maxAcc = Math.max(...Object.values(byAccount));
-
-    accounts.innerHTML = `
-      <div style="border:1px solid #2a2a2a;border-radius:14px;padding:12px;margin:10px 0;">
-        <strong>Dépenses par compte</strong>
-        ${
-          Object.entries(byAccount)
-            .sort((a,b) => b[1] - a[1])
-            .map(([acc,val]) => `
-              <div style="margin-top:6px;">
-                <div style="display:flex;justify-content:space-between;">
-                  <span>${acc}</span>
-                  <b>${eur(val)}</b>
-                </div>
-                ${bar(val, maxAcc, '#ffb86c')}
-              </div>
-            `).join('')
-        }
-      </div>
-    `;
+    renderLines(lines, months, byMonth);
   }
 
-  select.addEventListener('change', render);
+  filters.addEventListener('change', e => {
+    const f = e.target.dataset.filter;
+    state[f] = f === 'period' ? Number(e.target.value) : e.target.value;
+    render();
+  });
+
   render();
 }
