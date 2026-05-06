@@ -32,7 +32,27 @@ function dateFromFinancialMonth(financialMonth, day) {
   const dd = clampDay(y, m, Number(day));
   return `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
 }
+/**
+ * Détermine le mois budgétaire à partir du dernier salaire AVANT une date donnée
+ * Règle : salaire = début du mois budgétaire jusqu’au salaire suivant
+ */
+async function getFinancialMonthForDate(date) {
+  const movements = await all(STORES.MOVEMENTS);
 
+  // On récupère tous les salaires, triés du plus récent au plus ancien
+  const salaries = movements
+    .filter(m => m.type === 'SALAIRE')
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  for (const s of salaries) {
+    if (date >= s.date) {
+      return s.financialMonth;
+    }
+  }
+
+  // Cas extrême : aucune saisie de salaire encore
+  return monthFromDate(date);
+}
 async function isApplied(financialMonth) {
   const flags = await all(STORES.FLAGS);
   return flags.some(f => f.financialMonth === financialMonth && f.recurrentsApplied);
@@ -93,7 +113,16 @@ async function applyRecurring(financialMonth, triggeredByMovementId) {
  */
 export async function addMovementWithTriggers(m) {
   const month = monthFromDate(m.date);
-  const financialMonth = (m.type === 'SALAIRE') ? nextMonth(month) : month;
+
+  let financialMonth;
+
+  if (m.type === 'SALAIRE') {
+    // Salaire = déclenche un NOUVEAU mois budgétaire
+    financialMonth = nextMonth(month);
+  } else {
+    // Dépense / entrée = rattachée au dernier salaire AVANT la date
+    financialMonth = await getFinancialMonthForDate(m.date);
+  }
 
   const movement = {
     id: uid(),
