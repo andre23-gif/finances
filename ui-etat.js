@@ -80,5 +80,7 @@ box.innerHTML = `
     Mois budgétaire : ${fm}
   </div>
 `;
+});
+}
 
-``
+
