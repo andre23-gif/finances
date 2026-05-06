@@ -30,21 +30,56 @@ export async function updateEtatUI() {
       .filter(m => m.financialMonth === fm && m.account === acc)
       .filter(m => !m.status || m.status === 'SAISIE_MANUELLE' || m.status === 'APPLIQUEE');
 
-    let income = 0;
-    let expense = 0;
+let income = 0;
+let expense = 0;
 
-    ms.forEach(m => {
-      const amt = Number(m.amount || 0);
-      if (amt > 0) income += amt;
-      else expense += Math.abs(amt);
-    });
+// Nouveaux calculs
+let currentBalance = 0; // solde réel logique (présent)
+let futureExpense = 0;  // dépenses à venir
 
-    box.innerHTML = `
-      <div class="kpi">Mois budgétaire : <strong>${fm}</strong></div>
-      <div class="kpi">Entrées : <strong>${eur(income)}</strong></div>
-      <div class="kpi">Dépenses : <strong>${eur(expense)}</strong></div>
-      <div class="kpi">Solde : <strong>${eur(income - expense)}</strong></div>
-    `;
-  });
-}
+const today = new Date().toISOString().slice(0, 10);
+
+ms.forEach(m => {
+  const amt = Number(m.amount || 0);
+
+  // Budget mensuel (existant)
+  if (amt > 0) income += amt;
+  else expense += Math.abs(amt);
+
+  // Présent / futur
+  if (m.date <= today) {
+    currentBalance += amt;
+  } else {
+    if (amt < 0) {
+      futureExpense += Math.abs(amt);
+    }
+  }
+});
+
+
+box.innerHTML = `
+  <div class="kpi">
+    <strong>État du mois</strong>
+  </div>
+
+  <div class="kpi">
+    Solde actuel :
+    <strong>${eur(currentBalance)}</strong>
+  </div>
+
+  <div class="kpi">
+    À venir :
+    <strong>-${eur(futureExpense)}</strong>
+  </div>
+
+  <div class="kpi">
+    <hr>
+    Reste fin de mois :
+    <strong>${eur(income - expense)}</strong>
+  </div>
+
+  <div class="kpi muted">
+    Mois budgétaire : ${fm}
+  </div>
+`;
 ``
