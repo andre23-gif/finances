@@ -1,4 +1,3 @@
-// engine.js
 import { add, put, all, STORES } from './db.js';
 
 /* ==================== Utils ==================== */
@@ -80,7 +79,7 @@ async function markApplied(financialMonth, triggeredByMovementId) {
  * Applique les templates récurrents (UNE FOIS par mois budgétaire)
  * amount dans template = négatif
  */
-async function applyRecurring(financialMonth, triggeredByMovementId) {
+export async function applyRecurring(financialMonth, triggeredByMovementId) {
   if (await isApplied(financialMonth)) return;
 
   const templates = await all(STORES.RECURRING);
@@ -163,4 +162,3 @@ export async function addMovementWithTriggers(m) {
 
   return movement;
 }
-``
