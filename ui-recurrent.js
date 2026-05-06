@@ -1,4 +1,3 @@
-// ui-recurrent.js
 import { add, put, del, all, STORES } from './db.js';
 
 /* ==================== Utils ==================== */
@@ -197,6 +196,65 @@ export function initRecurrentUI() {
   if (!container) return;
   container.innerHTML = '';
 
+  // --- AJOUT EXPORT/IMPORT ---
+  let toolbar = page.querySelector('.recurrent-toolbar');
+  if (!toolbar) {
+    toolbar = document.createElement('div');
+    toolbar.className = 'recurrent-toolbar';
+    page.prepend(toolbar);
+  }
+  toolbar.innerHTML = '';
+
+  // Bouton Export
+  const btnExport = document.createElement('button');
+  btnExport.textContent = "Exporter les récurrents";
+  btnExport.onclick = async () => {
+    const recurrents = await all(STORES.RECURRING);
+    const blob = new Blob([JSON.stringify(recurrents, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'recurrents-backup.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  toolbar.appendChild(btnExport);
+
+  // Bouton Import
+  const btnImport = document.createElement('button');
+  btnImport.textContent = "Importer des récurrents";
+  btnImport.onclick = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const text = await file.text();
+      let recurrents;
+      try {
+        recurrents = JSON.parse(text);
+      } catch (e) {
+        alert("Fichier invalide !");
+        return;
+      }
+      if (!Array.isArray(recurrents)) {
+        alert("Format non reconnu.");
+        return;
+      }
+      for (const r of recurrents) {
+        if (r && r.id && r.account && r.day && r.amount) {
+          await put(STORES.RECURRING, r);
+        }
+      }
+      alert("Import terminé !");
+      location.reload();
+    };
+    input.click();
+  };
+  toolbar.appendChild(btnImport);
+  // --- FIN EXPORT/IMPORT ---
+
   const state = { selectedAccount: 'all' };
 
   const menu = buildAccountMenu(state, async () => {
@@ -267,27 +325,26 @@ export function initRecurrentUI() {
         const left = el('div');
         left.appendChild(el('div', { class: 'ri-label' }, item.label || '(sans libellé)'));
 
-const meta = el('div', { class: 'ri-meta' });
+        const meta = el('div', { class: 'ri-meta' });
 
-const badgeApply = el(
-  'span',
-  { class: 'badge' },
-  item.active === false ? '⏸ Inactif' : '✅ Appliqué au prochain salaire'
-);
+        const badgeApply = el(
+          'span',
+          { class: 'badge' },
+          item.active === false ? '⏸ Inactif' : '✅ Appliqué au prochain salaire'
+        );
 
-// Style (optionnel mais propre)
-badgeApply.style.borderColor = item.active === false ? '#555' : '#2f7f55';
-badgeApply.style.color = item.active === false ? '#aaa' : '#6ee7b7';
+        badgeApply.style.borderColor = item.active === false ? '#555' : '#2f7f55';
+        badgeApply.style.color = item.active === false ? '#aaa' : '#6ee7b7';
 
-meta.append(
-  el('span', { class: 'badge' }, item.account),
-  el('span', { class: 'badge' }, `Jour ${item.day}`),
-  el('span', { class: 'badge' }, item.category || '—'),
-  el('span', { class: 'badge' }, item.paymentMethod || '—'),
-  badgeApply
-);
+        meta.append(
+          el('span', { class: 'badge' }, item.account),
+          el('span', { class: 'badge' }, `Jour ${item.day}`),
+          el('span', { class: 'badge' }, item.category || '—'),
+          el('span', { class: 'badge' }, item.paymentMethod || '—'),
+          badgeApply
+        );
 
-left.appendChild(meta);
+        left.appendChild(meta);
 
         const right = el('div', { class: 'ri-side' });
         right.appendChild(el('div', { class: 'ri-amount' }, eur(item.amount)));
