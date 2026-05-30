@@ -2,7 +2,6 @@ import { add, put, all, STORES } from './db.js';
 
 /* ==================== Utils ==================== */
 
-/** ID unique */
 function uid() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -10,12 +9,10 @@ function uid() {
   return String(Date.now()) + '-' + Math.random().toString(16).slice(2);
 }
 
-/** "YYYY-MM-DD" -> "YYYY-MM" */
 function monthFromDate(dateStr) {
   return String(dateStr).slice(0, 7);
 }
 
-/** "YYYY-MM" -> mois suivant */
 function nextMonth(yyyyMm) {
   const [y, m] = yyyyMm.split('-').map(Number);
   const d = new Date(y, m, 1);
@@ -27,43 +24,72 @@ function clampDay(year, month1to12, day) {
   return Math.max(1, Math.min(day, last));
 }
 
-/** "YYYY-MM" + day -> "YYYY-MM-DD" */
 function dateFromFinancialMonth(financialMonth, day) {
   const [y, m] = financialMonth.split('-').map(Number);
   const dd = clampDay(y, m, Number(day));
   return `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
 }
 
-/* ==================== Mois budgétaire ==================== */
+/* ==================== REPORT DE SOLDE ==================== */
 
-/**
- * Détermine le mois budgétaire à partir du dernier salaire AVANT une date donnée
- * Règle : salaire = début du mois budgétaire jusqu’au salaire suivant
- */
+async function createBalanceCarryOver(newFinancialMonth) {
+  const movements = await all(STORES.MOVEMENTS);
+  const accounts = ['perso', 'internet', 'commun', 'cash'];
+
+  // mois financier précédent
+  const [y, m] = newFinancialMonth.split('-').map(Number);
+  const prev = new Date(y, m - 2, 1);
+  const prevMonth = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+
+  for (const acc of accounts) {
+    const balance = movements
+      .filter(m => m.account === acc && m.financialMonth === prevMonth)
+      .reduce((s, m) => s + Number(m.amount || 0), 0);
+
+    if (balance === 0) continue;
+
+    await add(STORES.MOVEMENTS, {
+      id: uid(),
+      account: acc,
+      date: `${newFinancialMonth}-01`,
+      month: newFinancialMonth,
+      financialMonth: newFinancialMonth,
+
+      amount: balance,
+      type: 'ENTREE',
+      status: 'APPLIQUEE',
+
+      category: 'report',
+      label: 'Solde reporté',
+      paymentMethod: 'transfer',
+
+      origin: 'SYSTEM',
+      createdAt: new Date().toISOString()
+    });
+  }
+}
+
+/* ==================== MOIS BUDGÉTAIRE ==================== */
+
 async function getFinancialMonthForDate(date) {
   const movements = await all(STORES.MOVEMENTS);
 
   const salaries = movements
     .filter(m => m.type === 'SALAIRE')
-    .sort((a, b) => b.date.localeCompare(a.date)); // plus récent d’abord
+    .sort((a, b) => b.date.localeCompare(a.date));
 
   for (const s of salaries) {
-    if (date >= s.date) {
-      return s.financialMonth;
-    }
+    if (date >= s.date) return s.financialMonth;
   }
 
-  // Cas extrême : aucun salaire encore
   return monthFromDate(date);
 }
 
-/* ==================== Récurrences ==================== */
+/* ==================== RÉCURRENCES ==================== */
 
 async function isApplied(financialMonth) {
   const flags = await all(STORES.FLAGS);
-  return flags.some(
-    f => f.financialMonth === financialMonth && f.recurrentsApplied === true
-  );
+  return flags.some(f => f.financialMonth === financialMonth && f.recurrentsApplied);
 }
 
 async function markApplied(financialMonth, triggeredByMovementId) {
@@ -75,10 +101,6 @@ async function markApplied(financialMonth, triggeredByMovementId) {
   });
 }
 
-/**
- * Applique les templates récurrents (UNE FOIS par mois budgétaire)
- * amount dans template = négatif
- */
 export async function applyRecurring(financialMonth, triggeredByMovementId) {
   if (await isApplied(financialMonth)) return;
 
@@ -89,14 +111,14 @@ export async function applyRecurring(financialMonth, triggeredByMovementId) {
 
     const d = dateFromFinancialMonth(financialMonth, Number(t.day));
 
-    const movement = {
+    await add(STORES.MOVEMENTS, {
       id: uid(),
       account: t.account,
       date: d,
       month: monthFromDate(d),
       financialMonth,
 
-      amount: Number(t.amount), // négatif
+      amount: Number(t.amount),
       type: 'DEPENSE',
       status: 'APPLIQUEE',
 
@@ -107,30 +129,21 @@ export async function applyRecurring(financialMonth, triggeredByMovementId) {
       origin: 'RECURRENTE',
       recurrenceId: t.id,
       createdAt: new Date().toISOString()
-    };
-
-    await add(STORES.MOVEMENTS, movement);
+    });
   }
 
   await markApplied(financialMonth, triggeredByMovementId);
 }
 
-/* ==================== Entrée principale ==================== */
+/* ==================== ENTRÉE PRINCIPALE ==================== */
 
-/**
- * Ajout d’un mouvement + déclencheurs
- * ✅ Salaire = ouvre un NOUVEAU mois budgétaire
- * ✅ Dépense / entrée = rattachée au dernier salaire AVANT sa date
- */
 export async function addMovementWithTriggers(m) {
   const month = monthFromDate(m.date);
   let financialMonth;
 
   if (m.type === 'SALAIRE') {
-    // Salaire = ouverture du mois budgétaire suivant
     financialMonth = nextMonth(month);
   } else {
-    // Dépense / entrée = mois budgétaire du dernier salaire
     financialMonth = await getFinancialMonthForDate(m.date);
   }
 
@@ -142,7 +155,7 @@ export async function addMovementWithTriggers(m) {
     financialMonth,
 
     amount: Number(m.amount),
-    type: m.type, // DEPENSE | ENTREE | SALAIRE
+    type: m.type,
     status: m.status || 'SAISIE_MANUELLE',
 
     category: m.category || '',
@@ -155,8 +168,8 @@ export async function addMovementWithTriggers(m) {
 
   await add(STORES.MOVEMENTS, movement);
 
-  // Le salaire déclenche les récurrences du mois budgétaire
   if (movement.type === 'SALAIRE') {
+    await createBalanceCarryOver(movement.financialMonth);
     await applyRecurring(movement.financialMonth, movement.id);
   }
 
