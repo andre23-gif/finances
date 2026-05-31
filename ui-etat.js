@@ -23,14 +23,13 @@ export async function updateEtatUI() {
   const fm = months.length ? months[months.length - 1] : currentMonth();
 
   const accounts = ['perso', 'internet', 'commun', 'cash'];
-
   const today = new Date().toISOString().slice(0, 10);
 
   accounts.forEach(acc => {
     const box = document.querySelector(`.account-values[data-account="${acc}"]`);
     if (!box) return;
 
-    // ✅ Tous les mouvements utiles (y compris SYSTEM et RECURRENTE)
+    // Tous les mouvements utiles
     const ms = movements.filter(
       m =>
         m.financialMonth === fm &&
@@ -45,26 +44,31 @@ export async function updateEtatUI() {
 
     let currentBalance = 0;
     let futureExpense = 0;
+    let recurringApplied = 0;
 
     ms.forEach(m => {
       const amt = Number(m.amount || 0);
 
-      // ✅ Solde actuel = tout ce qui est passé
+      // ✅ Solde réel
       if (m.date <= today) {
         currentBalance += amt;
+
+        // ✅ TOTAL RÉCURRENTS DÉJÀ APPLIQUÉS
+        if (m.origin === 'RECURRENTE') {
+          recurringApplied += Math.abs(amt);
+        }
       }
 
-      // ✅ À venir = dépenses futures uniquement
+      // ✅ À venir
       if (m.date > today && amt < 0) {
         futureExpense += Math.abs(amt);
       }
     });
 
-    // ✅ Solde futur
     const projected = currentBalance - futureExpense;
 
     box.innerHTML = `
-      <div class="kpi"><strong>Compte</strong></div>
+      <div class="kpi"><strong>${acc.toUpperCase()}</strong></div>
 
       <div class="kpi">
         Solde actuel :
@@ -80,6 +84,11 @@ export async function updateEtatUI() {
         <hr>
         Solde prévisionnel :
         <strong>${eur(projected)}</strong>
+      </div>
+
+      <div class="kpi">
+        Récurrents déjà appliqués :
+        <strong>-${eur(recurringApplied)}</strong>
       </div>
 
       <div class="kpi muted">
