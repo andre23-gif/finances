@@ -1,146 +1,104 @@
-/* ==================== DESIGN GLOBAL ==================== */
+/* ==================== SAISIE MOBILE ==================== */
 
-:root {
-  --bg: #080b0d;
-  --panel: #11171b;
-
-  --text: #e9eef4;
-  --muted: #95a3af;
-
-  --green: #2bff8f;
-  --green-dark: #0fcb6a;
-
-  --danger: #ff6b6b;
-
-  --border: rgba(255,255,255,0.08);
-}
-
-/* Reset */
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  font-family: -apple-system, system-ui, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-}
-
-/* ==================== CONTAINER ==================== */
-
-.page {
-  padding: 12px;
-}
-
-/* ==================== COMPTES ==================== */
-
-.accounts {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-@media (max-width: 600px) {
-  .accounts {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ==================== CARTE ==================== */
-
-.account-card {
-  background: var(--panel);
+/* Carte bloc saisie */
+.saisie-card {
   border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
   padding: 14px;
-  border: 1px solid var(--border);
+  margin-bottom: 14px;
+  background: #0f1214;
 }
 
-/* ==================== KPI ==================== */
-
-.kpi {
-  margin-bottom: 12px;
-}
-
-.kpi strong {
-  display: block;
-  font-size: 22px;
-  margin-top: 4px;
-}
-
-/* titre compte */
-.kpi:first-child strong {
+/* Titre bloc */
+.saisie-card > div:first-child {
+  font-weight: 700;
   font-size: 16px;
-  color: var(--green);
+  margin-bottom: 10px;
+  color: #2bff90;
 }
 
-/* ligne séparatrice */
-.kpi hr {
-  border: none;
-  border-top: 1px solid var(--border);
-  margin: 10px 0;
+/* Champs */
+.saisie-field label {
+  font-size: 13px;
+  color: #9aa6b2;
 }
 
-/* texte discret */
-.kpi.muted {
-  font-size: 12px;
-  color: var(--muted);
+.saisie-field input,
+.saisie-field select {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: #0c0f11;
+  color: #e8e8e8;
 }
 
-/* ==================== COULEURS ==================== */
-
-.positive {
-  color: var(--green);
-}
-
-.negative {
-  color: var(--danger);
+/* Focus propre */
+.saisie-field input:focus,
+.saisie-field select:focus {
+  outline: none;
+  border-color: #2bff90;
+  box-shadow: 0 0 0 3px rgba(43,255,144,0.15);
 }
 
 /* ==================== BOUTONS ==================== */
 
-button {
-  border: none;
-  border-radius: 10px;
-  padding: 10px;
-  font-size: 15px;
-  cursor: pointer;
-
-  background: var(--green);
-  color: #02150c;
-}
-
-button:active {
-  transform: scale(0.98);
-}
-
-/* ==================== INPUT ==================== */
-
-input, select {
+/* Bouton principal (Valider) */
+button[data-save-all] {
   width: 100%;
-  padding: 10px;
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #2bff90;
+  color: #002b15;
+  font-weight: 700;
   font-size: 16px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: #0d1316;
-  color: var(--text);
 }
 
-/* ==================== MOBILE UX ==================== */
+/* Boutons + Dépense / + Recette */
+button[data-add-expense],
+button[data-add-income] {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #1a1f22;
+  color: #e8e8e8;
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+/* ==================== ESPACEMENT ==================== */
+
+[data-expenses],
+[data-incomes] {
+  margin-bottom: 10px;
+}
+
+/* ==================== MOBILE ==================== */
 
 @media (max-width: 600px) {
 
-  button, input, select {
+  /* Gros champs pour le doigt */
+  input, select, button {
     min-height: 48px;
+    font-size: 16px;
   }
 
-  .kpi strong {
-    font-size: 24px;
+  /* Lisibilité */
+  .saisie-card {
+    padding: 16px;
+  }
+
+  /* Montant plus visible */
+  input[type="number"] {
+    font-size: 20px;
+    font-weight: 600;
   }
 }
 
-/* iPhone tap */
-button, a, [role="button"] {
+/* ==================== TAP IPHONE ==================== */
+
+button, input, select {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
