@@ -1,4 +1,4 @@
-import { add, del, all, STORES } from './db.js';
+import { add, all, STORES } from './db.js';
 
 /* ==================== Utils ==================== */
 
@@ -55,7 +55,7 @@ async function getFinancialMonthForDate(date) {
   return monthFromDate(date);
 }
 
-/* ==================== Solde reporté ==================== */
+/* ==================== Reports de solde ==================== */
 
 /**
  * Calcule le solde réel d'un compte juste AVANT la date du salaire.
@@ -64,7 +64,7 @@ async function getFinancialMonthForDate(date) {
  * - si un "Solde reporté" existe déjà dans l'historique, on repart de ce report
  * - sinon on cumule tous les mouvements antérieurs
  *
- * Cela évite de doubler l'historique lorsqu'on utilise des reports mensuels.
+ * Cela évite de doubler l'historique si on garde tous les mouvements anciens.
  */
 async function getAccountBalanceBeforeDate(account, salaryDate) {
   const movements = await all(STORES.MOVEMENTS);
@@ -73,7 +73,6 @@ async function getAccountBalanceBeforeDate(account, salaryDate) {
     .filter(m => m.account === account && m.date < salaryDate)
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // dernier report existant avant la date
   const lastReport = [...accountMovements]
     .reverse()
     .find(m => m.origin === 'SYSTEM' && m.category === 'report');
@@ -90,28 +89,22 @@ async function getAccountBalanceBeforeDate(account, salaryDate) {
 }
 
 /**
- * Supprime les lignes générées automatiquement pour un mois financier :
- * - les reports de solde
- * - les récurrents
- *
- * Cela permet de recalculer proprement le mois si on ressaisit un salaire.
+ * Vérifie si un report de solde existe déjà pour un compte et un mois financier.
  */
-async function deleteGeneratedForFinancialMonth(financialMonth) {
+async function hasCarryOverForMonth(account, financialMonth) {
   const movements = await all(STORES.MOVEMENTS);
-
-  const generated = movements.filter(
+  return movements.some(
     m =>
+      m.account === account &&
       m.financialMonth === financialMonth &&
-      (m.origin === 'SYSTEM' || m.origin === 'RECURRENTE')
+      m.origin === 'SYSTEM' &&
+      m.category === 'report'
   );
-
-  for (const m of generated) {
-    await del(STORES.MOVEMENTS, m.id);
-  }
 }
 
 /**
- * Crée une ligne "Solde reporté" pour chaque compte dans le nouveau mois financier.
+ * Crée une ligne "Solde reporté" pour chaque compte dans le nouveau mois financier,
+ * uniquement si elle n'existe pas déjà.
  *
  * Règle métier :
  * - le report est daté à la date du salaire
@@ -121,8 +114,10 @@ async function createBalanceCarryOver(newFinancialMonth, salaryDate) {
   const accounts = ['perso', 'internet', 'commun', 'cash'];
 
   for (const acc of accounts) {
-    const balance = await getAccountBalanceBeforeDate(acc, salaryDate);
+    const alreadyExists = await hasCarryOverForMonth(acc, newFinancialMonth);
+    if (alreadyExists) continue;
 
+    const balance = await getAccountBalanceBeforeDate(acc, salaryDate);
     if (balance === 0) continue;
 
     await add(STORES.MOVEMENTS, {
@@ -149,18 +144,35 @@ async function createBalanceCarryOver(newFinancialMonth, salaryDate) {
 /* ==================== Récurrents ==================== */
 
 /**
- * Recrée complètement les mouvements récurrents d'un mois financier.
+ * Vérifie si un mouvement récurrent existe déjà pour ce template dans ce mois financier.
+ */
+async function hasRecurringMovement(financialMonth, recurrenceId) {
+  const movements = await all(STORES.MOVEMENTS);
+  return movements.some(
+    m =>
+      m.financialMonth === financialMonth &&
+      m.origin === 'RECURRENTE' &&
+      m.recurrenceId === recurrenceId
+  );
+}
+
+/**
+ * Ajoute les mouvements récurrents d'un mois financier
+ * uniquement s'ils n'existent pas déjà.
  *
  * Important :
+ * - les templates de STORES.RECURRING restent intouchables
+ * - pas de suppression
  * - pas de flag bloquant
- * - on repart toujours des templates actifs
- * - le recalcul est piloté par la saisie du salaire
  */
-export async function applyRecurring(financialMonth) {
+export async function applyRecurring(financialMonth, _triggeredByMovementId = null) {
   const templates = await all(STORES.RECURRING);
 
   for (const t of templates) {
     if (t.active === false) continue;
+
+    const alreadyExists = await hasRecurringMovement(financialMonth, t.id);
+    if (alreadyExists) continue;
 
     const day = Number(t.day) || 1;
     const d = dateFromFinancialMonth(financialMonth, day);
@@ -188,15 +200,15 @@ export async function applyRecurring(financialMonth) {
 }
 
 /**
- * Recalcule complètement un mois financier :
- * 1. supprime reports/récurrents générés
- * 2. recrée les reports
- * 3. recrée les récurrents
+ * Ouvre / complète un mois financier :
+ * - ajoute les reports manquants
+ * - ajoute les récurrents manquants
+ *
+ * Aucun effacement.
  */
-async function rebuildFinancialMonth(financialMonth, salaryDate) {
-  await deleteGeneratedForFinancialMonth(financialMonth);
+async function ensureFinancialMonth(financialMonth, salaryDate, salaryMovementId) {
   await createBalanceCarryOver(financialMonth, salaryDate);
-  await applyRecurring(financialMonth);
+  await applyRecurring(financialMonth, salaryMovementId);
 }
 
 /* ==================== Entrée principale ==================== */
@@ -207,7 +219,7 @@ async function rebuildFinancialMonth(financialMonth, salaryDate) {
  * Règles métier :
  * - SALAIRE :
  *    ouvre le mois financier suivant
- *    puis recalcule complètement ce mois (solde reporté + récurrents)
+ *    puis complète ce mois (reports + récurrents)
  *
  * - toute autre écriture :
  *    est rattachée au dernier salaire antérieur
@@ -244,7 +256,7 @@ export async function addMovementWithTriggers(m) {
   await add(STORES.MOVEMENTS, movement);
 
   if (movement.type === 'SALAIRE') {
-    await rebuildFinancialMonth(movement.financialMonth, movement.date);
+    await ensureFinancialMonth(movement.financialMonth, movement.date, movement.id);
   }
 
   return movement;
