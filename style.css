@@ -1,104 +1,187 @@
-/* ==================== SAISIE MOBILE ==================== */
+/* ==================== BASE ==================== */
 
-/* Carte bloc saisie */
-.saisie-card {
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.08);
-  padding: 14px;
-  margin-bottom: 14px;
-  background: #0f1214;
+:root{
+  --bg:#060809;
+  --bg2:#090e10;
+  --panel:#0e1417;
+
+  --text:#e9eef4;
+  --muted:#92a0ad;
+
+  --green:#29ff8a;
+
+  --border:rgba(233,238,244,.12);
 }
 
-/* Titre bloc */
-.saisie-card > div:first-child {
-  font-weight: 700;
-  font-size: 16px;
-  margin-bottom: 10px;
-  color: #2bff90;
+*{
+  box-sizing:border-box;
 }
 
-/* Champs */
-.saisie-field label {
-  font-size: 13px;
-  color: #9aa6b2;
+html{
+  background-color: var(--bg); /* ✅ FIX IPHONE */
 }
 
-.saisie-field input,
-.saisie-field select {
-  width: 100%;
-  padding: 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: #0c0f11;
-  color: #e8e8e8;
+body{
+  margin:0;
+  font-family: -apple-system, system-ui, sans-serif;
+  color:var(--text);
+
+  /* ✅ IMPORTANT : deux fonds = stabilité iPhone */
+  background-color: var(--bg);
+
+  background:
+    radial-gradient(900px 520px at 18% -10%, rgba(41,255,138,.20), transparent 55%),
+    radial-gradient(900px 520px at 85% 0%, rgba(41,255,138,.12), transparent 55%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
 }
 
-/* Focus propre */
-.saisie-field input:focus,
-.saisie-field select:focus {
-  outline: none;
-  border-color: #2bff90;
-  box-shadow: 0 0 0 3px rgba(43,255,144,0.15);
+/* ==================== PAGE ==================== */
+
+.page{
+  padding:12px;
+}
+
+/* ==================== COMPTES ==================== */
+
+.accounts{
+  display:grid;
+  grid-template-columns:repeat(2, 1fr);
+  gap:12px;
+}
+
+@media (max-width:600px){
+  .accounts{
+    grid-template-columns:1fr;
+  }
+}
+
+/* ==================== CARTES ==================== */
+
+.account-card{
+  background: var(--panel);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:14px;
+}
+
+/* ==================== KPI ==================== */
+
+.kpi{
+  margin-bottom:12px;
+}
+
+.kpi strong{
+  display:block;
+  font-size:20px;
+  margin-top:4px;
+}
+
+/* titre compte */
+.kpi:first-child strong{
+  font-size:14px;
+  color:var(--green);
+}
+
+/* séparateur */
+.kpi hr{
+  border:none;
+  border-top:1px solid var(--border);
+  margin:10px 0;
+}
+
+/* texte faible */
+.kpi.muted{
+  font-size:12px;
+  color:var(--muted);
 }
 
 /* ==================== BOUTONS ==================== */
 
-/* Bouton principal (Valider) */
-button[data-save-all] {
-  width: 100%;
-  margin-top: 16px;
-  padding: 14px;
-  border-radius: 12px;
-  background: #2bff90;
-  color: #002b15;
-  font-weight: 700;
-  font-size: 16px;
+button{
+  border-radius:12px;
+  border:1px solid var(--border);
+  padding:12px;
+  background:rgba(233,238,244,.05);
+  color:var(--text);
+  font-size:15px;
 }
 
-/* Boutons + Dépense / + Recette */
-button[data-add-expense],
-button[data-add-income] {
-  width: 100%;
-  margin-top: 8px;
-  padding: 12px;
-  border-radius: 10px;
-  background: #1a1f22;
-  color: #e8e8e8;
-  border: 1px solid rgba(255,255,255,0.10);
+button:active{
+  transform:scale(0.98);
 }
 
-/* ==================== ESPACEMENT ==================== */
-
-[data-expenses],
-[data-incomes] {
-  margin-bottom: 10px;
+/* bouton principal */
+button.primary, button[data-save-all]{
+  background:linear-gradient(135deg, var(--green), #12d36a);
+  color:#03140a;
+  font-weight:700;
 }
 
-/* ==================== MOBILE ==================== */
+/* ==================== INPUT ==================== */
 
-@media (max-width: 600px) {
+input, select{
+  width:100%;
+  padding:12px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:rgba(233,238,244,.04);
+  color:var(--text);
+  font-size:16px;
+}
 
-  /* Gros champs pour le doigt */
-  input, select, button {
-    min-height: 48px;
-    font-size: 16px;
+input:focus, select:focus{
+  outline:none;
+  border-color:var(--green);
+  box-shadow:0 0 0 3px rgba(41,255,138,.12);
+}
+
+/* ==================== SAISIE ==================== */
+
+.saisie-card{
+  background: var(--panel);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:14px;
+  margin-bottom:14px;
+}
+
+.saisie-card > div:first-child{
+  font-weight:700;
+  margin-bottom:10px;
+}
+
+.saisie-field{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin-bottom:10px;
+}
+
+/* ==================== MOBILE IPHONE ==================== */
+
+@media (max-width:600px){
+
+  input, select, button{
+    min-height:48px; /* ✅ doigt */
   }
 
-  /* Lisibilité */
-  .saisie-card {
-    padding: 16px;
+  input[type="number"]{
+    font-size:20px; /* ✅ montant visible */
+    font-weight:600;
   }
 
-  /* Montant plus visible */
-  input[type="number"] {
-    font-size: 20px;
-    font-weight: 600;
+  .account-card{
+    padding:16px;
+  }
+
+  .kpi strong{
+    font-size:22px;
   }
 }
 
-/* ==================== TAP IPHONE ==================== */
+/* ==================== FIX IPHONE TACTILE ==================== */
 
-button, input, select {
+button, input, select, a{
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
