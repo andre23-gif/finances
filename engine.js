@@ -57,15 +57,6 @@ async function getFinancialMonthForDate(date) {
 
 /* ==================== Reports de solde ==================== */
 
-/**
- * Calcule le solde réel d'un compte juste AVANT la date du salaire.
- *
- * Important :
- * - si un "Solde reporté" existe déjà dans l'historique, on repart de ce report
- * - sinon on cumule tous les mouvements antérieurs
- *
- * Cela évite de doubler l'historique si on garde tous les mouvements anciens.
- */
 async function getAccountBalanceBeforeDate(account, salaryDate) {
   const movements = await all(STORES.MOVEMENTS);
 
@@ -78,14 +69,17 @@ async function getAccountBalanceBeforeDate(account, salaryDate) {
     .find(m => m.origin === 'SYSTEM' && m.category === 'report');
 
   if (!lastReport) {
+    // Pas de report antérieur : on cumule tout
     return accountMovements.reduce((sum, m) => sum + Number(m.amount || 0), 0);
   }
 
-  return accountMovements.reduce((sum, m) => {
-    if (m.id === lastReport.id) return Number(lastReport.amount || 0);
-    if (m.date <= lastReport.date) return sum;
-    return sum + Number(m.amount || 0);
-  }, 0);
+  // On repart du montant du report, et on n'additionne
+  // QUE les mouvements STRICTEMENT postérieurs au report
+  const afterReport = accountMovements.filter(m => m.date > lastReport.date);
+  return afterReport.reduce(
+    (sum, m) => sum + Number(m.amount || 0),
+    Number(lastReport.amount || 0)   // ← point de départ = solde du report
+  );
 }
 
 /**
