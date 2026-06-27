@@ -1,5 +1,28 @@
 import { all, STORES } from './db.js';
 
+/* ==================== Cache léger ==================== */
+
+// Évite de relire toute la DB à chaque affichage de la page État.
+// Le cache est invalidé dès qu'on revient sur la page (TTL 5s).
+let _cache = null;
+let _cacheTime = 0;
+const CACHE_TTL = 5000; // ms
+
+async function getMovements() {
+  const now = Date.now();
+  if (_cache && now - _cacheTime < CACHE_TTL) return _cache;
+  _cache = await all(STORES.MOVEMENTS);
+  _cacheTime = now;
+  return _cache;
+}
+
+/** Appeler après toute écriture pour forcer un rechargement au prochain affichage. */
+export function invalidateEtatCache() {
+  _cache = null;
+}
+
+/* ==================== Utils ==================== */
+
 function eur(v) {
   return Number(v || 0).toLocaleString('fr-FR', {
     style: 'currency',
@@ -12,10 +35,12 @@ function currentMonth() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-export async function updateEtatUI() {
-  const movements = await all(STORES.MOVEMENTS);
+/* ==================== UI ==================== */
 
-  // Mois financier courant
+export async function updateEtatUI() {
+  const movements = await getMovements();
+
+  // Mois financier courant = le plus récent présent dans les mouvements
   const months = Array.from(
     new Set(movements.map(m => m.financialMonth).filter(Boolean))
   ).sort();
@@ -29,7 +54,7 @@ export async function updateEtatUI() {
     const box = document.querySelector(`.account-values[data-account="${acc}"]`);
     if (!box) return;
 
-    // Tous les mouvements utiles
+    // Mouvements du mois financier courant pour ce compte
     const ms = movements.filter(
       m =>
         m.financialMonth === fm &&
@@ -49,17 +74,20 @@ export async function updateEtatUI() {
     ms.forEach(m => {
       const amt = Number(m.amount || 0);
 
-      // ✅ Solde réel
+      // FIX : le report (origin=SYSTEM, category=report) est le point de départ
+      // du mois. On l'inclut dans le solde actuel UNIQUEMENT s'il est daté
+      // avant ou égal à aujourd'hui — ce qui est toujours le cas puisqu'il est
+      // daté à la date du salaire (dans le passé). Pas de traitement spécial
+      // nécessaire : la condition m.date <= today suffit.
+
       if (m.date <= today) {
         currentBalance += amt;
 
-        // ✅ TOTAL RÉCURRENTS DÉJÀ APPLIQUÉS
         if (m.origin === 'RECURRENTE') {
           recurringApplied += Math.abs(amt);
         }
       }
 
-      // ✅ À venir
       if (m.date > today && amt < 0) {
         futureExpense += Math.abs(amt);
       }
@@ -67,12 +95,14 @@ export async function updateEtatUI() {
 
     const projected = currentBalance - futureExpense;
 
-    box.innerHTML = `
-      <div class="kpi"><strong>${acc.toUpperCase()}</strong></div>
+    // Couleur selon solde
+    const balColor = currentBalance < 0 ? '#ff6b6b' : 'inherit';
+    const projColor = projected < 0 ? '#ff6b6b' : '#6ee7b7';
 
+    box.innerHTML = `
       <div class="kpi">
         Solde actuel :
-        <strong>${eur(currentBalance)}</strong>
+        <strong style="color:${balColor}">${eur(currentBalance)}</strong>
       </div>
 
       <div class="kpi">
@@ -83,7 +113,7 @@ export async function updateEtatUI() {
       <div class="kpi">
         <hr>
         Solde prévisionnel :
-        <strong>${eur(projected)}</strong>
+        <strong style="color:${projColor}">${eur(projected)}</strong>
       </div>
 
       <div class="kpi">
