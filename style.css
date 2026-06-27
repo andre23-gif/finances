@@ -185,3 +185,41 @@ button, input, select, a{
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
+
+
+/* ==================== SAISIE MULTI-BLOCS ==================== */
+.saisie-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+
+/* Remplace l'ancien ciblage par position qui ne fonctionne plus */
+.saisie-card > div:first-child {
+  margin-bottom: 0; /* neutralisé, géré par .saisie-card-header */
+}
+
+.btn-remove {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  color: #ff6b6b;
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 8px;
+  min-height: auto; /* écrase le min-height 48px du reset mobile */
+  line-height: 1;
+}
+
+.btn-remove:active {
+  background: rgba(255, 107, 107, .15);
+}
+
+/* Feedback saisie (vert / rouge) */
+.saisie-feedback {
+  font-size: 14px;
+  min-height: 20px;
+  padding: 4px 0;
+}
