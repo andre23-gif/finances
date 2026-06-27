@@ -71,11 +71,23 @@ export async function initArchivesUI() {
   header.appendChild(importBtn);
   header.appendChild(exportBtn);
 
+  // Zone de feedback (succès / erreur) sous le header
+  const feedback = document.createElement('div');
+  feedback.className = 'archives-feedback muted';
+  feedback.style.margin = '8px 0';
+
   const list = document.createElement('div');
   list.className = 'archives-list';
 
   container.appendChild(header);
+  container.appendChild(feedback);
   container.appendChild(list);
+
+  function showFeedback(msg, isError = false) {
+    feedback.textContent = msg;
+    feedback.style.color = isError ? '#ff6b6b' : '#6ee7b7';
+    setTimeout(() => { feedback.textContent = ''; }, 4000);
+  }
 
   /* ---------- Render ---------- */
   function render() {
@@ -118,12 +130,17 @@ export async function initArchivesUI() {
           </div>
         `;
 
-        // Suppression ❌
         row.querySelector('.ar-del').addEventListener('click', async () => {
           const ok = confirm('Supprimer cette saisie ?');
           if (!ok) return;
-          await del(STORES.MOVEMENTS, m.id);
-          initArchivesUI();
+          try {
+            await del(STORES.MOVEMENTS, m.id);
+            showFeedback('Saisie supprimée.');
+            initArchivesUI();
+          } catch (e) {
+            console.error(e);
+            showFeedback('Erreur lors de la suppression.', true);
+          }
         });
 
         list.appendChild(row);
@@ -132,6 +149,17 @@ export async function initArchivesUI() {
 
   /* ---------- Import (remplacement total) ---------- */
   importBtn.addEventListener('click', async () => {
+    // FIX : double confirmation explicite avant d'écraser toute la base
+    const step1 = confirm(
+      `⚠️ ATTENTION\n\nL'import va EFFACER et REMPLACER TOUS les mouvements existants.\n\nContinuer ?`
+    );
+    if (!step1) return;
+
+    const step2 = confirm(
+      `Dernière confirmation.\n\nTu vas écraser ${counted.length} mouvement(s).\nCette action est irréversible.\n\nConfirmer l'import ?`
+    );
+    if (!step2) return;
+
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
@@ -140,12 +168,25 @@ export async function initArchivesUI() {
       const file = input.files && input.files[0];
       if (!file) return;
 
+      importBtn.disabled = true;
+      importBtn.textContent = 'Import en cours…';
+
       try {
         const text = await file.text();
         const imported = JSON.parse(text);
 
         if (!Array.isArray(imported)) {
-          alert('Import refusé : le fichier doit contenir un tableau JSON.');
+          showFeedback('Import refusé : le fichier doit contenir un tableau JSON.', true);
+          return;
+        }
+
+        // Vérification préalable de tous les ids avant d'effacer quoi que ce soit
+        const invalid = imported.filter(m => !m.id);
+        if (invalid.length) {
+          showFeedback(
+            `Import refusé : ${invalid.length} mouvement(s) sans id dans le fichier.`,
+            true
+          );
           return;
         }
 
@@ -156,19 +197,20 @@ export async function initArchivesUI() {
         }
 
         // Réinsérer
+        let inserted = 0;
         for (const m of imported) {
-          if (!m.id) {
-            alert('Import refusé : chaque mouvement doit avoir un id.');
-            return;
-          }
           await put(STORES.MOVEMENTS, m);
+          inserted++;
         }
 
-        alert('Import JSON terminé (remplacement total).');
+        showFeedback(`Import terminé : ${inserted} mouvement(s) chargés.`);
         initArchivesUI();
       } catch (e) {
         console.error(e);
-        alert('Erreur lors de l’import du fichier JSON.');
+        showFeedback('Erreur lors de l\'import. Fichier invalide ou base corrompue.', true);
+      } finally {
+        importBtn.disabled = false;
+        importBtn.textContent = 'Importer JSON';
       }
     };
 
@@ -181,6 +223,7 @@ export async function initArchivesUI() {
     const data = (fm === 'all') ? counted : counted.filter(m => m.financialMonth === fm);
     const name = (fm === 'all') ? 'archives-completes.json' : `archives-${fm}.json`;
     downloadJSON(name, data);
+    showFeedback(`Export "${name}" téléchargé.`);
   });
 
   select.addEventListener('change', render);
