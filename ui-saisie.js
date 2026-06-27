@@ -4,17 +4,17 @@ import { addMovementWithTriggers } from './engine.js';
 /* ==================== Constantes ==================== */
 
 const ACCOUNTS = [
-  { value: 'perso', label: 'Perso' },
+  { value: 'perso',    label: 'Perso' },
   { value: 'internet', label: 'Internet' },
-  { value: 'commun', label: 'Commun' },
-  { value: 'cash', label: 'Cash' }
+  { value: 'commun',   label: 'Commun' },
+  { value: 'cash',     label: 'Cash' }
 ];
 
 const PAYMENTS = [
-  { value: 'cash', label: '💵 Cash' },
+  { value: 'cash',     label: '💵 Cash' },
   { value: 'transfer', label: '🔁 Virement' },
-  { value: 'card', label: '💳 Carte' },
-  { value: 'check', label: '🧾 Chèque' }
+  { value: 'card',     label: '💳 Carte' },
+  { value: 'check',    label: '🧾 Chèque' }
 ];
 
 /* ==================== Utils ==================== */
@@ -33,118 +33,132 @@ function el(tag, attrs = {}, text = '') {
   return n;
 }
 
-function input(type, placeholder = '', extra = {}) {
-  return el('input', { type, placeholder, ...extra });
-}
-
 function select(options, value) {
   const s = el('select');
-  options.forEach(o => {
-    s.appendChild(el('option', { value: o.value }, o.label));
-  });
+  options.forEach(o => s.appendChild(el('option', { value: o.value }, o.label)));
   if (value) s.value = value;
   return s;
 }
 
 function field(label, control) {
   const wrap = el('div', { class: 'saisie-field' });
-  wrap.style.display = 'flex';
-  wrap.style.flexDirection = 'column';
-  wrap.style.gap = '6px';
-  wrap.style.marginBottom = '10px';
-
   const l = el('label', { class: 'muted' }, label);
-  l.style.fontSize = '0.9em';
-
   wrap.appendChild(l);
   wrap.appendChild(control);
   return wrap;
 }
 
-function card(title) {
-  const wrap = el('div', { class: 'saisie-card' });
-  wrap.style.border = '1px solid #2a2a2a';
-  wrap.style.borderRadius = '14px';
-  wrap.style.padding = '12px';
-  wrap.style.margin = '12px 0';
-  wrap.style.background = '#0f0f0f';
+/* ==================== Bloc de saisie ==================== */
 
-  const h = el('div', {}, title);
-  h.style.fontWeight = '700';
-  h.style.marginBottom = '10px';
-
-  wrap.appendChild(h);
-  return wrap;
-}
-
-/* ==================== Form blocs ==================== */
-
-function buildMovementBlock(kind) {
+/**
+ * Crée un bloc de saisie (dépense ou recette) avec un bouton ✕ pour le supprimer.
+ * onRemove : callback appelé quand l'utilisateur clique ✕.
+ */
+function buildMovementBlock(kind, onRemove) {
   const isExpense = kind === 'expense';
-  const wrap = card(isExpense ? '+ Dépense' : '+ Recette');
 
-  const iDate = input('date');
-  iDate.value = todayISO();
+  const wrap = el('div', { class: 'saisie-card' });
+
+  /* --- En-tête avec bouton suppression --- */
+  const header = el('div', { class: 'saisie-card-header' });
+  const title  = el('span', {}, isExpense ? 'Dépense' : 'Recette');
+  const removeBtn = el('button', { type: 'button', class: 'btn-remove', title: 'Supprimer cette ligne' }, '✕');
+  removeBtn.addEventListener('click', () => onRemove());
+  header.appendChild(title);
+  header.appendChild(removeBtn);
+  wrap.appendChild(header);
+
+  /* --- Champs --- */
+  const iDate    = el('input', { type: 'date' });
+  iDate.value    = todayISO();
 
   const sAccount = select(ACCOUNTS, 'perso');
-  const iAmount = input('number', '0.00', { step: '0.01', inputmode: 'decimal' });
+  const iAmount  = el('input', { type: 'number', placeholder: '0.00', step: '0.01', inputmode: 'decimal' });
   const sPayment = select(PAYMENTS, isExpense ? 'card' : 'transfer');
-  const iCategory = input('text', 'Famille');
-  const iLabel = input('text', 'Précision');
+  const iCategory = el('input', { type: 'text', placeholder: 'Famille' });
+  const iLabel   = el('input', { type: 'text', placeholder: 'Précision' });
 
-  wrap.appendChild(field('Date', iDate));
-  wrap.appendChild(field('Compte', sAccount));
-  wrap.appendChild(field('Montant', iAmount));
-  wrap.appendChild(field('Moyen de paiement', sPayment));
-  wrap.appendChild(field('Famille', iCategory));
-  wrap.appendChild(field('Précision', iLabel));
+  wrap.appendChild(field('Date',               iDate));
+  wrap.appendChild(field('Compte',             sAccount));
+  wrap.appendChild(field('Montant',            iAmount));
+  wrap.appendChild(field('Moyen de paiement',  sPayment));
+  wrap.appendChild(field('Famille',            iCategory));
+  wrap.appendChild(field('Précision',          iLabel));
 
   return {
     root: wrap,
+    focus() { iAmount.focus(); },
     getValue() {
       const amountNum = Number(iAmount.value);
-
-      if (!iDate.value || !sAccount.value || !amountNum) {
-        return null;
-      }
+      if (!iDate.value || !sAccount.value || !amountNum) return null;
 
       let type = isExpense ? 'DEPENSE' : 'ENTREE';
-
-      // Si la recette est catégorisée "salaire", on force le type SALAIRE
       if (!isExpense && (iCategory.value || '').trim().toLowerCase() === 'salaire') {
         type = 'SALAIRE';
       }
 
-      const amount = type === 'DEPENSE'
-        ? -Math.abs(amountNum)
-        : Math.abs(amountNum);
+      const amount = type === 'DEPENSE' ? -Math.abs(amountNum) : Math.abs(amountNum);
 
       return {
-        account: sAccount.value,
-        date: iDate.value,
+        account:       sAccount.value,
+        date:          iDate.value,
         amount,
         type,
-        status: 'SAISIE_MANUELLE',
-        category: (iCategory.value || '').trim(),
-        label: (iLabel.value || '').trim(),
+        status:        'SAISIE_MANUELLE',
+        category:      (iCategory.value || '').trim(),
+        label:         (iLabel.value || '').trim(),
         paymentMethod: sPayment.value
       };
-    },
-    reset() {
-      iDate.value = todayISO();
-      sAccount.value = 'perso';
-      iAmount.value = '';
-      sPayment.value = isExpense ? 'card' : 'transfer';
-      iCategory.value = '';
-      iLabel.value = '';
-    },
-    focus() {
-      iAmount.focus();
     }
   };
 }
 
-/* ==================== UI ==================== */
+/* ==================== Gestionnaire de liste ==================== */
+
+/**
+ * Gère une liste dynamique de blocs de saisie (dépenses ou recettes).
+ * - addBlock()  : ajoute un nouveau bloc vide et scrolle dessus
+ * - getValues() : retourne les valeurs valides de tous les blocs
+ * - clear()     : supprime tous les blocs sauf un vide
+ */
+function buildBlockList(kind, container) {
+  const blocks = [];
+
+  function removeBlock(block) {
+    const idx = blocks.indexOf(block);
+    if (idx === -1) return;
+    blocks.splice(idx, 1);
+    block.root.remove();
+    // Toujours garder au moins un bloc vide
+    if (!blocks.length) addBlock();
+  }
+
+  function addBlock() {
+    const block = buildMovementBlock(kind, () => removeBlock(block));
+    blocks.push(block);
+    container.appendChild(block.root);
+    block.focus();
+    block.root.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return block;
+  }
+
+  function getValues() {
+    return blocks.map(b => b.getValue()).filter(Boolean);
+  }
+
+  function clear() {
+    blocks.forEach(b => b.root.remove());
+    blocks.length = 0;
+    addBlock();
+  }
+
+  // Bloc initial
+  addBlock();
+
+  return { addBlock, getValues, clear };
+}
+
+/* ==================== UI principale ==================== */
 
 export function initSaisieUI() {
   const page = document.querySelector('.page[data-page="saisie"]');
@@ -154,52 +168,62 @@ export function initSaisieUI() {
   const incContainer = page.querySelector('[data-incomes]');
   if (!expContainer || !incContainer) return;
 
-  // On vide les anciens contenus
   expContainer.innerHTML = '';
   incContainer.innerHTML = '';
 
-  // On supprime les restes éventuels d’ancienne UI
-  page.querySelector('.saisie-totals')?.remove();
-  page.querySelector('.account-menu')?.remove();
+  const expList = buildBlockList('expense', expContainer);
+  const incList = buildBlockList('income',  incContainer);
 
-  // Construire les deux blocs de saisie
-  const expenseBlock = buildMovementBlock('expense');
-  const incomeBlock = buildMovementBlock('income');
-
-  expContainer.appendChild(expenseBlock.root);
-  incContainer.appendChild(incomeBlock.root);
-
-  // Boutons existants si déjà présents dans le HTML
+  /* --- Boutons toolbar --- */
   const addExpenseBtn = page.querySelector('[data-add-expense]');
-  const addIncomeBtn = page.querySelector('[data-add-income]');
-  const saveBtn = page.querySelector('[data-save-all]');
+  const addIncomeBtn  = page.querySelector('[data-add-income]');
+  const saveBtn       = page.querySelector('[data-save-all]');
 
-  // Comme on n’est plus en logique tableau multi-lignes,
-  // les boutons + servent juste à remettre le focus / réinitialiser le bloc
-  addExpenseBtn?.addEventListener('click', () => {
-    expenseBlock.reset();
-    expenseBlock.focus();
-  });
+  addExpenseBtn?.addEventListener('click', () => expList.addBlock());
+  addIncomeBtn?.addEventListener('click',  () => incList.addBlock());
 
-  addIncomeBtn?.addEventListener('click', () => {
-    incomeBlock.reset();
-    incomeBlock.focus();
-  });
+  /* --- Feedback --- */
+  let feedbackEl = page.querySelector('.saisie-feedback');
+  if (!feedbackEl) {
+    feedbackEl = el('div', { class: 'saisie-feedback muted' });
+    feedbackEl.style.margin = '8px 0';
+    saveBtn?.parentElement?.insertAdjacentElement('afterend', feedbackEl);
+  }
 
+  function showFeedback(msg, isError = false) {
+    feedbackEl.textContent = msg;
+    feedbackEl.style.color = isError ? '#ff6b6b' : '#6ee7b7';
+    setTimeout(() => { feedbackEl.textContent = ''; }, 4000);
+  }
+
+  /* --- Validation & enregistrement --- */
   saveBtn?.addEventListener('click', async () => {
     const values = [
-      expenseBlock.getValue(),
-      incomeBlock.getValue()
-    ].filter(Boolean);
+      ...expList.getValues(),
+      ...incList.getValues()
+    ];
 
-    if (!values.length) return;
-
-    for (const m of values) {
-      await addMovementWithTriggers(m);
+    if (!values.length) {
+      showFeedback('Aucune ligne valide à enregistrer.', true);
+      return;
     }
 
-    expenseBlock.reset();
-    incomeBlock.reset();
-    expenseBlock.focus();
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Enregistrement…';
+
+    try {
+      for (const m of values) {
+        await addMovementWithTriggers(m);
+      }
+      showFeedback(`${values.length} mouvement(s) enregistré(s).`);
+      expList.clear();
+      incList.clear();
+    } catch (err) {
+      console.error('[saisie]', err);
+      showFeedback(err.message || 'Erreur lors de l\'enregistrement.', true);
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Valider tout';
+    }
   });
 }
