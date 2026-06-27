@@ -1,4 +1,5 @@
-import { add, put, del, all, STORES } from './db.js';
+// ui-recurrent.js
+import { add, put, del, all, putMany, STORES } from './db.js';
 
 /* ==================== Utils ==================== */
 
@@ -41,17 +42,45 @@ function netColor(n) {
   return n < 0 ? '#ff6b6b' : '#6ee7b7';
 }
 
+/* ==================== Mois financier courant ==================== */
+
+/**
+ * Retourne le mois financier courant = le plus récent présent dans MOVEMENTS.
+ * Fallback sur le mois civil si aucun mouvement.
+ */
+async function getCurrentFinancialMonth() {
+  const movements = await all(STORES.MOVEMENTS);
+  const months = Array.from(
+    new Set(movements.map(m => m.financialMonth).filter(Boolean))
+  ).sort();
+  return months.length ? months[months.length - 1] : todayISO().slice(0, 7);
+}
+
+/**
+ * Retourne un Set des recurrenceId déjà appliqués pour un mois financier donné.
+ */
+async function getAppliedRecurrenceIds(financialMonth) {
+  const movements = await all(STORES.MOVEMENTS);
+  const ids = new Set();
+  movements
+    .filter(m => m.financialMonth === financialMonth && m.origin === 'RECURRENTE')
+    .forEach(m => ids.add(m.recurrenceId));
+  return ids;
+}
+
 /* ==================== Totaux ==================== */
 
 async function computeTotals() {
   const movements = await all(STORES.MOVEMENTS);
-  const currentMonth = todayISO().slice(0, 7);
+
+  // FIX : on utilise le mois financier courant, pas le mois civil
+  const fm = await getCurrentFinancialMonth();
 
   const sum = () => ({ in: 0, out: 0 });
   const pack = t => ({ in: t.in, out: Math.abs(t.out), net: t.in + t.out });
 
   const monthAll = sum();
-  const allAll = sum();
+  const allAll   = sum();
 
   const byAccMonth = { perso: sum(), commun: sum(), internet: sum(), cash: sum() };
   const byAccAll   = { perso: sum(), commun: sum(), internet: sum(), cash: sum() };
@@ -60,20 +89,18 @@ async function computeTotals() {
     const amt = Number(m.amount || 0);
     const acc = m.account;
 
-    // global
-    if (amt > 0) allAll.in += amt;
+    if (amt > 0) allAll.in  += amt;
     if (amt < 0) allAll.out += amt;
     if (byAccAll[acc]) {
-      if (amt > 0) byAccAll[acc].in += amt;
+      if (amt > 0) byAccAll[acc].in  += amt;
       if (amt < 0) byAccAll[acc].out += amt;
     }
 
-    // mois courant
-    if (m.financialMonth === currentMonth) {
-      if (amt > 0) monthAll.in += amt;
+    if (m.financialMonth === fm) {
+      if (amt > 0) monthAll.in  += amt;
       if (amt < 0) monthAll.out += amt;
       if (byAccMonth[acc]) {
-        if (amt > 0) byAccMonth[acc].in += amt;
+        if (amt > 0) byAccMonth[acc].in  += amt;
         if (amt < 0) byAccMonth[acc].out += amt;
       }
     }
@@ -86,22 +113,22 @@ async function computeTotals() {
   };
 
   return {
-    currentMonth,
-    monthAll: pack(monthAll),
-    allAll: pack(allAll),
+    financialMonth: fm,
+    monthAll:   pack(monthAll),
+    allAll:     pack(allAll),
     byAccMonth: mapPack(byAccMonth),
-    byAccAll: mapPack(byAccAll)
+    byAccAll:   mapPack(byAccAll)
   };
 }
 
 function renderTotals(totalsEl, state, t) {
-  const acc = state.selectedAccount;
+  const acc   = state.selectedAccount;
   const label = acc === 'all'
     ? 'Tous les comptes'
     : acc.charAt(0).toUpperCase() + acc.slice(1);
 
   const month = acc === 'all' ? t.monthAll : t.byAccMonth[acc];
-  const all   = acc === 'all' ? t.allAll   : t.byAccAll[acc];
+  const glob  = acc === 'all' ? t.allAll   : t.byAccAll[acc];
 
   const card = (title, x, subtitle = '') => `
     <div style="border:1px solid #2a2a2a;border-radius:14px;padding:10px;margin:8px 0;background:#0f0f0f;">
@@ -128,8 +155,8 @@ function renderTotals(totalsEl, state, t) {
 
   totalsEl.innerHTML = `
     <div class="muted" style="margin:6px 0;">Contexte : <b>${label}</b></div>
-    ${card('Mois courant', month, t.currentMonth)}
-    ${card('Cumul global', all)}
+    ${card('Mois financier courant', month, t.financialMonth)}
+    ${card('Cumul global', glob)}
   `;
 }
 
@@ -143,11 +170,11 @@ function buildAccountMenu(state, onChange) {
   wrap.style.margin = '10px 0';
 
   const accounts = [
-    { value: 'all', label: 'Tous' },
-    { value: 'perso', label: 'Perso' },
-    { value: 'commun', label: 'Commun' },
+    { value: 'all',      label: 'Tous' },
+    { value: 'perso',    label: 'Perso' },
+    { value: 'commun',   label: 'Commun' },
     { value: 'internet', label: 'Internet' },
-    { value: 'cash', label: 'Cash' }
+    { value: 'cash',     label: 'Cash' }
   ];
 
   const mkBtn = (v, label) => {
@@ -155,10 +182,7 @@ function buildAccountMenu(state, onChange) {
     b.style.padding = '8px 10px';
     b.style.borderRadius = '999px';
     b.style.border = '1px solid #2a2a2a';
-    b.style.background = state.selectedAccount === v ? '#1a1a1a' : '#0f0f0f';
-    b.style.fontWeight = state.selectedAccount === v ? '800' : '600';
     b.style.cursor = 'pointer';
-
     b.addEventListener('click', () => {
       state.selectedAccount = v;
       refreshStyles();
@@ -173,11 +197,12 @@ function buildAccountMenu(state, onChange) {
   function refreshStyles() {
     buttons.forEach((b, i) => {
       const v = accounts[i].value;
-      b.style.background = state.selectedAccount === v ? '#1a1a1a' : '#0f0f0f';
-      b.style.fontWeight = state.selectedAccount === v ? '800' : '600';
+      b.style.background  = state.selectedAccount === v ? '#1a1a1a' : '#0f0f0f';
+      b.style.fontWeight  = state.selectedAccount === v ? '800'     : '600';
     });
   }
 
+  refreshStyles();
   wrap._refresh = refreshStyles;
   return wrap;
 }
@@ -188,7 +213,6 @@ export function initRecurrentUI() {
   const page = document.querySelector('.page[data-page="recurrent"]');
   if (!page || page.hidden) return;
 
-  // évite doublons
   page.querySelector('.account-menu')?.remove();
   page.querySelector('.recurrent-totals')?.remove();
 
@@ -196,7 +220,7 @@ export function initRecurrentUI() {
   if (!container) return;
   container.innerHTML = '';
 
-  // --- AJOUT EXPORT/IMPORT ---
+  /* ---------- Toolbar export / import ---------- */
   let toolbar = page.querySelector('.recurrent-toolbar');
   if (!toolbar) {
     toolbar = document.createElement('div');
@@ -205,24 +229,33 @@ export function initRecurrentUI() {
   }
   toolbar.innerHTML = '';
 
-  // Bouton Export
+  // Feedback toolbar
+  const tbFeedback = el('span', { class: 'muted' });
+  tbFeedback.style.fontSize = '13px';
+  tbFeedback.style.marginLeft = '10px';
+
+  function showTbFeedback(msg, isError = false) {
+    tbFeedback.textContent = msg;
+    tbFeedback.style.color = isError ? '#ff6b6b' : '#6ee7b7';
+    setTimeout(() => { tbFeedback.textContent = ''; }, 4000);
+  }
+
   const btnExport = document.createElement('button');
-  btnExport.textContent = "Exporter les récurrents";
+  btnExport.textContent = 'Exporter les récurrents';
   btnExport.onclick = async () => {
     const recurrents = await all(STORES.RECURRING);
-    const blob = new Blob([JSON.stringify(recurrents, null, 2)], {type: 'application/json'});
+    const blob = new Blob([JSON.stringify(recurrents, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'recurrents-backup.json';
     a.click();
     URL.revokeObjectURL(url);
+    showTbFeedback(`${recurrents.length} récurrent(s) exporté(s).`);
   };
-  toolbar.appendChild(btnExport);
 
-  // Bouton Import
   const btnImport = document.createElement('button');
-  btnImport.textContent = "Importer des récurrents";
+  btnImport.textContent = 'Importer des récurrents';
   btnImport.onclick = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -230,31 +263,29 @@ export function initRecurrentUI() {
     input.onchange = async e => {
       const file = e.target.files[0];
       if (!file) return;
-      const text = await file.text();
-      let recurrents;
       try {
-        recurrents = JSON.parse(text);
-      } catch (e) {
-        alert("Fichier invalide !");
-        return;
-      }
-      if (!Array.isArray(recurrents)) {
-        alert("Format non reconnu.");
-        return;
-      }
-      for (const r of recurrents) {
-        if (r && r.id && r.account && r.day && r.amount) {
-          await put(STORES.RECURRING, r);
+        const text = await file.text();
+        const recurrents = JSON.parse(text);
+        if (!Array.isArray(recurrents)) {
+          showTbFeedback('Format non reconnu.', true);
+          return;
         }
+        const valid = recurrents.filter(r => r && r.id && r.account && r.day && r.amount);
+        // FIX : putMany atomique au lieu d'une boucle de put
+        await putMany(STORES.RECURRING, valid);
+        showTbFeedback(`${valid.length} récurrent(s) importé(s).`);
+        refresh();
+      } catch (err) {
+        console.error(err);
+        showTbFeedback('Fichier invalide.', true);
       }
-      alert("Import terminé !");
-      location.reload();
     };
     input.click();
   };
-  toolbar.appendChild(btnImport);
-  // --- FIN EXPORT/IMPORT ---
 
+  toolbar.append(btnExport, btnImport, tbFeedback);
+
+  /* ---------- Menu compte + totaux ---------- */
   const state = { selectedAccount: 'all' };
 
   const menu = buildAccountMenu(state, async () => {
@@ -271,20 +302,20 @@ export function initRecurrentUI() {
     renderTotals(totals, state, t);
   })();
 
-  /* ---------- Formulaire & liste (inchangés) ---------- */
+  /* ---------- Formulaire d'ajout ---------- */
 
   const ACCOUNTS = [
-    { value: 'perso', label: 'Compte perso' },
+    { value: 'perso',    label: 'Compte perso' },
     { value: 'internet', label: 'Compte internet' },
-    { value: 'commun', label: 'Compte commun' },
-    { value: 'cash', label: 'Compte cash' }
+    { value: 'commun',   label: 'Compte commun' },
+    { value: 'cash',     label: 'Compte cash' }
   ];
 
   const PAYMENTS = [
     { value: 'transfer', label: 'Virement' },
-    { value: 'card', label: 'Carte' },
-    { value: 'cash', label: 'Cash' },
-    { value: 'check', label: 'Chèque' }
+    { value: 'card',     label: 'Carte' },
+    { value: 'cash',     label: 'Cash' },
+    { value: 'check',    label: 'Chèque' }
   ];
 
   const form = el('div', { class: 'recurrent-form' });
@@ -296,17 +327,33 @@ export function initRecurrentUI() {
   const iLab = el('input', { type: 'text', placeholder: 'Libellé' });
   const sPay = select(PAYMENTS, 'transfer');
 
-  const addBtn = el('button', { class: 'btn-primary', type: 'button' }, 'Ajouter');
-  const hint = el('div', { class: 'muted' }, 'Astuce : le montant est stocké en dépense (valeur négative).');
+  const addBtn    = el('button', { class: 'btn-primary', type: 'button' }, 'Ajouter');
+  const formHint  = el('div', { class: 'muted' }, 'Astuce : le montant est stocké en dépense (valeur négative).');
+  const formFeedback = el('div', { class: 'muted' });
+  formFeedback.style.fontSize = '13px';
 
-  form.append(sAcc, iDay, iAmt, iCat, iLab, sPay, addBtn, hint);
+  function showFormFeedback(msg, isError = false) {
+    formFeedback.textContent = msg;
+    formFeedback.style.color = isError ? '#ff6b6b' : '#6ee7b7';
+    setTimeout(() => { formFeedback.textContent = ''; }, 3000);
+  }
+
+  form.append(sAcc, iDay, iAmt, iCat, iLab, sPay, addBtn, formHint, formFeedback);
+
+  /* ---------- Liste des récurrents ---------- */
 
   const list = el('div', { class: 'recurrent-list' });
   container.append(form, list);
 
   async function refresh() {
     list.innerHTML = '';
-    const items = await all(STORES.RECURRING);
+    const [items, fm] = await Promise.all([
+      all(STORES.RECURRING),
+      getCurrentFinancialMonth()
+    ]);
+
+    // FIX : on récupère les ids réellement appliqués ce mois-ci
+    const appliedIds = await getAppliedRecurrenceIds(fm);
 
     if (!items.length) {
       list.appendChild(el('div', { class: 'muted' }, 'Aucun prélèvement enregistré.'));
@@ -327,14 +374,25 @@ export function initRecurrentUI() {
 
         const meta = el('div', { class: 'ri-meta' });
 
-        const badgeApply = el(
-          'span',
-          { class: 'badge' },
-          item.active === false ? '⏸ Inactif' : '✅ Appliqué au prochain salaire'
-        );
+        // FIX badge : état réel basé sur les mouvements, pas juste sur item.active
+        let badgeText, badgeBorder, badgeColor;
+        if (item.active === false) {
+          badgeText   = '⏸ Inactif';
+          badgeBorder = '#555';
+          badgeColor  = '#aaa';
+        } else if (appliedIds.has(item.id)) {
+          badgeText   = `✅ Appliqué (${fm})`;
+          badgeBorder = '#2f7f55';
+          badgeColor  = '#6ee7b7';
+        } else {
+          badgeText   = '⏳ En attente du prochain salaire';
+          badgeBorder = '#7f6f2f';
+          badgeColor  = '#e7c76e';
+        }
 
-        badgeApply.style.borderColor = item.active === false ? '#555' : '#2f7f55';
-        badgeApply.style.color = item.active === false ? '#aaa' : '#6ee7b7';
+        const badgeApply = el('span', { class: 'badge' }, badgeText);
+        badgeApply.style.borderColor = badgeBorder;
+        badgeApply.style.color       = badgeColor;
 
         meta.append(
           el('span', { class: 'badge' }, item.account),
@@ -355,13 +413,14 @@ export function initRecurrentUI() {
           item.active === false ? 'Activer' : 'Désactiver'
         );
         toggle.addEventListener('click', async () => {
-          item.active = item.active === false ? true : false;
+          item.active = item.active !== false;
           await put(STORES.RECURRING, item);
           refresh();
         });
 
         const remove = el('button', { class: 'btn-secondary', type: 'button' }, 'Supprimer');
         remove.addEventListener('click', async () => {
+          if (!confirm(`Supprimer "${item.label || item.id}" ?`)) return;
           await del(STORES.RECURRING, item.id);
           refresh();
         });
@@ -376,32 +435,44 @@ export function initRecurrentUI() {
     const day = Number(iDay.value);
     const amt = Number(iAmt.value);
 
-    if (!day || day < 1 || day > 31) return;
-    if (!amt || amt <= 0) return;
+    if (!day || day < 1 || day > 31) {
+      showFormFeedback('Jour invalide (1-31).', true);
+      return;
+    }
+    if (!amt || amt <= 0) {
+      showFormFeedback('Montant invalide.', true);
+      return;
+    }
 
     const tpl = {
-      id: uid(),
-      account: sAcc.value,
+      id:            uid(),
+      account:       sAcc.value,
       day,
-      amount: -Math.abs(amt),
-      category: (iCat.value || '').trim(),
-      label: (iLab.value || '').trim(),
+      amount:        -Math.abs(amt),
+      category:      (iCat.value || '').trim(),
+      label:         (iLab.value || '').trim(),
       paymentMethod: sPay.value,
-      active: true,
-      createdAt: new Date().toISOString()
+      active:        true,
+      createdAt:     new Date().toISOString()
     };
 
-    await add(STORES.RECURRING, tpl);
+    try {
+      await add(STORES.RECURRING, tpl);
+      showFormFeedback(`"${tpl.label || tpl.id}" ajouté.`);
 
-    const t = await computeTotals();
-    renderTotals(totals, state, t);
+      const t = await computeTotals();
+      renderTotals(totals, state, t);
 
-    iDay.value = '';
-    iAmt.value = '';
-    iCat.value = '';
-    iLab.value = '';
+      iDay.value = '';
+      iAmt.value = '';
+      iCat.value = '';
+      iLab.value = '';
 
-    refresh();
+      refresh();
+    } catch (err) {
+      console.error(err);
+      showFormFeedback('Erreur lors de l\'ajout.', true);
+    }
   });
 
   refresh();
