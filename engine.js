@@ -36,7 +36,13 @@ function dateFromFinancialMonth(financialMonth, day) {
 /* ==================== Mois financier ==================== */
 
 /**
- * Retourne le mois financier du dernier salaire antérieur (ou égal) à une date.
+ * Retourne le mois financier du dernier salaire STRICTEMENT antérieur à une date.
+ *
+ * FIX : on utilise > (strict) au lieu de >= pour que les dépenses saisies
+ * le même jour qu'un salaire soient rattachées à l'ANCIEN mois financier,
+ * pas au nouveau. Le salaire ouvre le nouveau mois ; tout ce qui est saisi
+ * le même jour mais n'est pas un salaire appartient encore à l'ancien.
+ *
  * Si aucun salaire n'existe encore, fallback sur le mois civil.
  */
 async function getFinancialMonthForDate(date) {
@@ -44,11 +50,17 @@ async function getFinancialMonthForDate(date) {
 
   const salaries = movements
     .filter(m => m.type === 'SALAIRE')
-    .sort((a, b) => b.date.localeCompare(a.date)); // plus récent d’abord
+    .sort((a, b) => b.date.localeCompare(a.date)); // plus récent d'abord
 
   for (const s of salaries) {
-    if (date >= s.date) {
+    if (date > s.date) {
+      // dépense postérieure au salaire → nouveau mois financier
       return s.financialMonth;
+    }
+    if (date === s.date) {
+      // même jour que le salaire → ancien mois financier (avant ouverture)
+      // on continue vers le salaire précédent
+      continue;
     }
   }
 
@@ -57,6 +69,19 @@ async function getFinancialMonthForDate(date) {
 
 /* ==================== Reports de solde ==================== */
 
+/**
+ * Calcule le solde réel d'un compte juste AVANT la date du salaire.
+ *
+ * FIX : au lieu d'un reduce complexe et cassé, on :
+ *   1. cherche le dernier report existant (SYSTEM / report)
+ *   2. repart de son montant comme point de départ
+ *   3. additionne uniquement les mouvements STRICTEMENT postérieurs à ce report
+ *
+ * FIX balance=0 : on ne crée pas de report si le solde calculé est 0 ET
+ * qu'il n'y a aucun mouvement après le dernier report (compte vraiment vide).
+ * En revanche si des mouvements existent et se compensent, on crée bien le report
+ * à 0 pour marquer le point de départ du nouveau mois.
+ */
 async function getAccountBalanceBeforeDate(account, salaryDate) {
   const movements = await all(STORES.MOVEMENTS);
 
@@ -64,21 +89,22 @@ async function getAccountBalanceBeforeDate(account, salaryDate) {
     .filter(m => m.account === account && m.date < salaryDate)
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  if (!accountMovements.length) return null; // compte sans historique → pas de report
+
   const lastReport = [...accountMovements]
     .reverse()
     .find(m => m.origin === 'SYSTEM' && m.category === 'report');
 
   if (!lastReport) {
-    // Pas de report antérieur : on cumule tout
+    // Pas de report antérieur : cumul complet
     return accountMovements.reduce((sum, m) => sum + Number(m.amount || 0), 0);
   }
 
-  // On repart du montant du report, et on n'additionne
-  // QUE les mouvements STRICTEMENT postérieurs au report
+  // Repart du montant du report + mouvements STRICTEMENT postérieurs
   const afterReport = accountMovements.filter(m => m.date > lastReport.date);
   return afterReport.reduce(
     (sum, m) => sum + Number(m.amount || 0),
-    Number(lastReport.amount || 0)   // ← point de départ = solde du report
+    Number(lastReport.amount || 0)
   );
 }
 
@@ -100,38 +126,52 @@ async function hasCarryOverForMonth(account, financialMonth) {
  * Crée une ligne "Solde reporté" pour chaque compte dans le nouveau mois financier,
  * uniquement si elle n'existe pas déjà.
  *
- * Règle métier :
- * - le report est daté à la date du salaire
- * - il appartient au NOUVEAU mois financier
+ * FIX balance=0 : on crée le report même si le solde est 0, dès lors que le
+ * compte a un historique. Cela évite que le mois suivant repart d'un cumul
+ * complet de tout l'historique.
+ * Exception : si getAccountBalanceBeforeDate retourne null (aucun mouvement),
+ * on ne crée pas de report — le compte est vraiment vierge.
  */
 async function createBalanceCarryOver(newFinancialMonth, salaryDate) {
   const accounts = ['perso', 'internet', 'commun', 'cash'];
+  const errors = [];
 
   for (const acc of accounts) {
-    const alreadyExists = await hasCarryOverForMonth(acc, newFinancialMonth);
-    if (alreadyExists) continue;
+    try {
+      const alreadyExists = await hasCarryOverForMonth(acc, newFinancialMonth);
+      if (alreadyExists) continue;
 
-    const balance = await getAccountBalanceBeforeDate(acc, salaryDate);
-    if (balance === 0) continue;
+      const balance = await getAccountBalanceBeforeDate(acc, salaryDate);
 
-    await add(STORES.MOVEMENTS, {
-      id: uid(),
-      account: acc,
-      date: salaryDate,
-      month: monthFromDate(salaryDate),
-      financialMonth: newFinancialMonth,
+      // null = compte sans historique → pas de report à créer
+      if (balance === null) continue;
 
-      amount: balance,
-      type: 'ENTREE',
-      status: 'APPLIQUEE',
+      await add(STORES.MOVEMENTS, {
+        id: uid(),
+        account: acc,
+        date: salaryDate,
+        month: monthFromDate(salaryDate),
+        financialMonth: newFinancialMonth,
 
-      category: 'report',
-      label: 'Solde reporté',
-      paymentMethod: 'transfer',
+        amount: balance,
+        type: 'ENTREE',
+        status: 'APPLIQUEE',
 
-      origin: 'SYSTEM',
-      createdAt: new Date().toISOString()
-    });
+        category: 'report',
+        label: 'Solde reporté',
+        paymentMethod: 'transfer',
+
+        origin: 'SYSTEM',
+        createdAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error(`[engine] Erreur report compte ${acc} :`, err);
+      errors.push(acc);
+    }
+  }
+
+  if (errors.length) {
+    throw new Error(`Reports échoués pour : ${errors.join(', ')}`);
   }
 }
 
@@ -154,42 +194,49 @@ async function hasRecurringMovement(financialMonth, recurrenceId) {
  * Ajoute les mouvements récurrents d'un mois financier
  * uniquement s'ils n'existent pas déjà.
  *
- * Important :
- * - les templates de STORES.RECURRING restent intouchables
- * - pas de suppression
- * - pas de flag bloquant
+ * FIX : gestion d'erreur par récurrent — un échec n'interrompt pas les autres.
  */
 export async function applyRecurring(financialMonth, _triggeredByMovementId = null) {
   const templates = await all(STORES.RECURRING);
+  const errors = [];
 
   for (const t of templates) {
     if (t.active === false) continue;
 
-    const alreadyExists = await hasRecurringMovement(financialMonth, t.id);
-    if (alreadyExists) continue;
+    try {
+      const alreadyExists = await hasRecurringMovement(financialMonth, t.id);
+      if (alreadyExists) continue;
 
-    const day = Number(t.day) || 1;
-    const d = dateFromFinancialMonth(financialMonth, day);
+      const day = Number(t.day) || 1;
+      const d = dateFromFinancialMonth(financialMonth, day);
 
-    await add(STORES.MOVEMENTS, {
-      id: uid(),
-      account: t.account,
-      date: d,
-      month: monthFromDate(d),
-      financialMonth,
+      await add(STORES.MOVEMENTS, {
+        id: uid(),
+        account: t.account,
+        date: d,
+        month: monthFromDate(d),
+        financialMonth,
 
-      amount: Number(t.amount), // négatif
-      type: 'DEPENSE',
-      status: 'APPLIQUEE',
+        amount: Number(t.amount), // négatif
+        type: 'DEPENSE',
+        status: 'APPLIQUEE',
 
-      category: t.category || '',
-      label: t.label || '',
-      paymentMethod: t.paymentMethod || 'transfer',
+        category: t.category || '',
+        label: t.label || '',
+        paymentMethod: t.paymentMethod || 'transfer',
 
-      origin: 'RECURRENTE',
-      recurrenceId: t.id,
-      createdAt: new Date().toISOString()
-    });
+        origin: 'RECURRENTE',
+        recurrenceId: t.id,
+        createdAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error(`[engine] Erreur récurrent "${t.label}" :`, err);
+      errors.push(t.label || t.id);
+    }
+  }
+
+  if (errors.length) {
+    throw new Error(`Récurrents échoués : ${errors.join(', ')}`);
   }
 }
 
@@ -208,7 +255,7 @@ async function ensureFinancialMonth(financialMonth, salaryDate, salaryMovementId
 /* ==================== Entrée principale ==================== */
 
 /**
- * Ajout d’un mouvement.
+ * Ajout d'un mouvement.
  *
  * Règles métier :
  * - SALAIRE :
@@ -216,7 +263,9 @@ async function ensureFinancialMonth(financialMonth, salaryDate, salaryMovementId
  *    puis complète ce mois (reports + récurrents)
  *
  * - toute autre écriture :
- *    est rattachée au dernier salaire antérieur
+ *    est rattachée au dernier salaire antérieur (strictement)
+ *
+ * FIX : gestion d'erreur remontée à l'appelant avec message lisible.
  */
 export async function addMovementWithTriggers(m) {
   const month = monthFromDate(m.date);
@@ -236,7 +285,7 @@ export async function addMovementWithTriggers(m) {
     financialMonth,
 
     amount: Number(m.amount),
-    type: m.type, // DEPENSE | ENTREE | SALAIRE
+    type: m.type,
     status: m.status || 'SAISIE_MANUELLE',
 
     category: m.category || '',
@@ -247,10 +296,23 @@ export async function addMovementWithTriggers(m) {
     createdAt: new Date().toISOString()
   };
 
-  await add(STORES.MOVEMENTS, movement);
+  try {
+    await add(STORES.MOVEMENTS, movement);
+  } catch (err) {
+    console.error('[engine] Impossible d\'enregistrer le mouvement :', err);
+    throw new Error('Enregistrement échoué. Réessaie.');
+  }
 
   if (movement.type === 'SALAIRE') {
-    await ensureFinancialMonth(movement.financialMonth, movement.date, movement.id);
+    try {
+      await ensureFinancialMonth(movement.financialMonth, movement.date, movement.id);
+    } catch (err) {
+      // Le salaire est enregistré mais reports/récurrents partiels
+      console.error('[engine] Erreur lors de l\'ouverture du mois financier :', err);
+      throw new Error(
+        `Salaire enregistré, mais certains reports ou récurrents n'ont pas pu être créés : ${err.message}`
+      );
+    }
   }
 
   return movement;
