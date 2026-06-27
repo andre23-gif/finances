@@ -1,5 +1,5 @@
 // ui-archives.js
-import { all, del, put, STORES } from './db.js';
+import { all, del, replaceAll, STORES } from './db.js';
 
 /* ---------- Utils ---------- */
 function eur(value) {
@@ -71,7 +71,6 @@ export async function initArchivesUI() {
   header.appendChild(importBtn);
   header.appendChild(exportBtn);
 
-  // Zone de feedback (succès / erreur) sous le header
   const feedback = document.createElement('div');
   feedback.className = 'archives-feedback muted';
   feedback.style.margin = '8px 0';
@@ -149,7 +148,7 @@ export async function initArchivesUI() {
 
   /* ---------- Import (remplacement total) ---------- */
   importBtn.addEventListener('click', async () => {
-    // FIX : double confirmation explicite avant d'écraser toute la base
+    // Double confirmation avant d'écraser toute la base
     const step1 = confirm(
       `⚠️ ATTENTION\n\nL'import va EFFACER et REMPLACER TOUS les mouvements existants.\n\nContinuer ?`
     );
@@ -180,7 +179,7 @@ export async function initArchivesUI() {
           return;
         }
 
-        // Vérification préalable de tous les ids avant d'effacer quoi que ce soit
+        // Vérification de tous les ids AVANT d'écraser quoi que ce soit
         const invalid = imported.filter(m => !m.id);
         if (invalid.length) {
           showFeedback(
@@ -190,20 +189,10 @@ export async function initArchivesUI() {
           return;
         }
 
-        // Vider totalement le store
-        const existing = await all(STORES.MOVEMENTS);
-        for (const m of existing) {
-          await del(STORES.MOVEMENTS, m.id);
-        }
+        // ATOMIQUE : clear + insert en une seule transaction
+        await replaceAll(STORES.MOVEMENTS, imported);
 
-        // Réinsérer
-        let inserted = 0;
-        for (const m of imported) {
-          await put(STORES.MOVEMENTS, m);
-          inserted++;
-        }
-
-        showFeedback(`Import terminé : ${inserted} mouvement(s) chargés.`);
+        showFeedback(`Import terminé : ${imported.length} mouvement(s) chargés.`);
         initArchivesUI();
       } catch (e) {
         console.error(e);
