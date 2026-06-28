@@ -1,5 +1,5 @@
 // ui-archives.js
-import { all, del, replaceAll, STORES } from './db.js';
+import { all, del, replaceAll, putMany, STORES } from './db.js';
 
 /* ---------- Utils ---------- */
 function eur(value) {
@@ -17,6 +17,23 @@ function downloadJSON(filename, data) {
   a.click();
   URL.revokeObjectURL(url);
   a.remove();
+}
+
+/**
+ * Format de sauvegarde complète :
+ * { version: 1, movements: [...], recurring: [...] }
+ * Rétrocompatible : si le fichier est un tableau simple (ancien format),
+ * on l'interprète comme movements seulement.
+ */
+function parseBackup(raw) {
+  if (Array.isArray(raw)) {
+    // ancien format : tableau de mouvements uniquement
+    return { movements: raw, recurring: [] };
+  }
+  if (raw && raw.version === 1 && Array.isArray(raw.movements)) {
+    return { movements: raw.movements, recurring: raw.recurring || [] };
+  }
+  return null;
 }
 
 /* ---------- UI ---------- */
@@ -197,10 +214,31 @@ export async function initArchivesUI() {
           return;
         }
 
-        // ATOMIQUE : clear + insert en une seule transaction
-        await replaceAll(STORES.MOVEMENTS, imported);
+        const backup = parseBackup(imported);
+        if (!backup) {
+          showFeedback('Format non reconnu. Attendu : tableau ou objet {version:1, movements, recurring}.', true);
+          return;
+        }
 
-        showFeedback(`Import terminé : ${imported.length} mouvement(s) chargés.`);
+        // Vérification ids mouvements
+        const invalidMov = backup.movements.filter(m => !m.id);
+        if (invalidMov.length) {
+          showFeedback(`Import refusé : ${invalidMov.length} mouvement(s) sans id.`, true);
+          return;
+        }
+
+        // ATOMIQUE : remplacer les mouvements
+        await replaceAll(STORES.MOVEMENTS, backup.movements);
+
+        // Restaurer les récurrents si présents
+        if (backup.recurring.length) {
+          await putMany(STORES.RECURRING, backup.recurring);
+        }
+
+        const msg = backup.recurring.length
+          ? `Import terminé : ${backup.movements.length} mouvement(s) + ${backup.recurring.length} récurrent(s).`
+          : `Import terminé : ${backup.movements.length} mouvement(s) (pas de récurrents dans ce fichier).`;
+        showFeedback(msg);
         initArchivesUI();
       } catch (e) {
         console.error(e);
@@ -215,12 +253,21 @@ export async function initArchivesUI() {
   });
 
   /* ---------- Export ---------- */
-  exportBtn.addEventListener('click', () => {
+  exportBtn.addEventListener('click', async () => {
     const fm = select.value;
-    const data = (fm === 'all') ? counted : counted.filter(m => m.financialMonth === fm);
+    const movementsToExport = (fm === 'all') ? counted : counted.filter(m => m.financialMonth === fm);
     const name = (fm === 'all') ? 'archives-completes.json' : `archives-${fm}.json`;
-    downloadJSON(name, data);
-    showFeedback(`Export "${name}" téléchargé.`);
+
+    // Export complet = mouvements + récurrents (seulement pour "tous les mois")
+    if (fm === 'all') {
+      const recurring = await all(STORES.RECURRING);
+      downloadJSON(name, { version: 1, movements: movementsToExport, recurring });
+      showFeedback(`Export complet : ${movementsToExport.length} mouvement(s) + ${recurring.length} récurrent(s).`);
+    } else {
+      // Export partiel (un mois) = juste les mouvements, format simple
+      downloadJSON(name, movementsToExport);
+      showFeedback(`Export "${name}" téléchargé.`);
+    }
   });
 
   select.addEventListener('change', render);
