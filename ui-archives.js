@@ -116,11 +116,19 @@ export async function initArchivesUI() {
         const date = m.date || '—';
         const amt = Number(m.amount || 0);
 
+        // Badge origine
+        const originBadge = (() => {
+          if (m.origin === 'RECURRENTE') return '<span class="ar-badge ar-badge-rec">🔁 récurrent</span>';
+          if (m.origin === 'SYSTEM' && m.category === 'report') return '<span class="ar-badge ar-badge-sys">⚙️ report</span>';
+          return '';
+        })();
+
         row.innerHTML = `
           <div class="ar-main">
             <span class="ar-date">${date}</span>
             <span class="ar-label">${label}</span>
             <span class="ar-cat">${cat}</span>
+            ${originBadge}
           </div>
           <div class="ar-side">
             <span class="ar-acc">${acc}</span>
