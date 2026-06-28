@@ -261,21 +261,6 @@ export async function initArchivesUI() {
         const text = await file.text();
         const imported = JSON.parse(text);
 
-        if (!Array.isArray(imported)) {
-          showFeedback('Import refusé : le fichier doit contenir un tableau JSON.', true);
-          return;
-        }
-
-        // Vérification de tous les ids AVANT d'écraser quoi que ce soit
-        const invalid = imported.filter(m => !m.id);
-        if (invalid.length) {
-          showFeedback(
-            `Import refusé : ${invalid.length} mouvement(s) sans id dans le fichier.`,
-            true
-          );
-          return;
-        }
-
         const backup = parseBackup(imported);
         if (!backup) {
           showFeedback('Format non reconnu. Attendu : tableau ou objet {version:1, movements, recurring}.', true);
