@@ -74,6 +74,38 @@ export async function initArchivesUI() {
     select.appendChild(o);
   }
 
+  // Filtre compte
+  const selectAccount = document.createElement('select');
+  selectAccount.className = 'archives-select';
+  [
+    { value: 'all',      label: 'Tous les comptes' },
+    { value: 'perso',    label: 'Perso' },
+    { value: 'internet', label: 'Internet' },
+    { value: 'commun',   label: 'Commun' },
+    { value: 'cash',     label: 'Cash' }
+  ].forEach(({ value, label }) => {
+    const o = document.createElement('option');
+    o.value = value;
+    o.textContent = label;
+    selectAccount.appendChild(o);
+  });
+
+  // Filtre tri
+  const selectSort = document.createElement('select');
+  selectSort.className = 'archives-select';
+  [
+    { value: 'date-asc',   label: '📅 Date ↑' },
+    { value: 'date-desc',  label: '📅 Date ↓' },
+    { value: 'amt-asc',    label: '💶 Montant ↑' },
+    { value: 'amt-desc',   label: '💶 Montant ↓' },
+    { value: 'label-asc',  label: '🔤 Libellé ↑' },
+  ].forEach(({ value, label }) => {
+    const o = document.createElement('option');
+    o.value = value;
+    o.textContent = label;
+    selectSort.appendChild(o);
+  });
+
   const importBtn = document.createElement('button');
   importBtn.className = 'btn-secondary';
   importBtn.type = 'button';
@@ -85,6 +117,8 @@ export async function initArchivesUI() {
   exportBtn.textContent = 'Exporter JSON';
 
   header.appendChild(select);
+  header.appendChild(selectAccount);
+  header.appendChild(selectSort);
   header.appendChild(importBtn);
   header.appendChild(exportBtn);
 
@@ -105,11 +139,45 @@ export async function initArchivesUI() {
     setTimeout(() => { feedback.textContent = ''; }, 4000);
   }
 
+  /* ---------- Totaux filtrés ---------- */
+  const summary = document.createElement('div');
+  summary.className = 'muted';
+  summary.style.cssText = 'font-size:13px;margin:6px 0;display:flex;gap:16px;flex-wrap:wrap;';
+  container.insertBefore(summary, list);
+
   /* ---------- Render ---------- */
   function render() {
     list.innerHTML = '';
-    const fm = select.value;
-    const data = (fm === 'all') ? counted : counted.filter(m => m.financialMonth === fm);
+    const fm   = select.value;
+    const acc  = selectAccount.value;
+    const sort = selectSort.value;
+
+    let data = (fm === 'all') ? counted : counted.filter(m => m.financialMonth === fm);
+    if (acc !== 'all') data = data.filter(m => m.account === acc);
+
+    // Tri
+    data = data.slice().sort((a, b) => {
+      switch (sort) {
+        case 'date-asc':  return a.date.localeCompare(b.date) || a.label?.localeCompare(b.label||'');
+        case 'date-desc': return b.date.localeCompare(a.date) || a.label?.localeCompare(b.label||'');
+        case 'amt-asc':   return Number(a.amount) - Number(b.amount);
+        case 'amt-desc':  return Number(b.amount) - Number(a.amount);
+        case 'label-asc': return (a.label||'').localeCompare(b.label||'');
+        default:          return a.date.localeCompare(b.date);
+      }
+    });
+
+    // Résumé
+    const totalIn  = data.filter(m => Number(m.amount) > 0).reduce((s,m) => s + Number(m.amount), 0);
+    const totalOut = data.filter(m => Number(m.amount) < 0).reduce((s,m) => s + Number(m.amount), 0);
+    const net      = totalIn + totalOut;
+    const netColor = net >= 0 ? '#6ee7b7' : '#ff6b6b';
+    summary.innerHTML = `
+      <span>${data.length} ligne(s)</span>
+      <span style="color:#6ee7b7">Entrées : ${eur(totalIn)}</span>
+      <span style="color:#ff6b6b">Sorties : ${eur(Math.abs(totalOut))}</span>
+      <span style="color:${netColor};font-weight:700">Net : ${eur(net)}</span>
+    `;
 
     if (!data.length) {
       list.innerHTML = '<div class="muted">Aucune donnée.</div>';
@@ -117,12 +185,6 @@ export async function initArchivesUI() {
     }
 
     data
-      .slice()
-      .sort((a, b) => {
-        const ak = `${String(a.financialMonth)}|${String(a.date)}|${String(a.label || '')}`;
-        const bk = `${String(b.financialMonth)}|${String(b.date)}|${String(b.label || '')}`;
-        return ak.localeCompare(bk);
-      })
       .forEach(m => {
         const row = document.createElement('div');
         row.className = 'archive-row';
@@ -271,5 +333,7 @@ export async function initArchivesUI() {
   });
 
   select.addEventListener('change', render);
+  selectAccount.addEventListener('change', render);
+  selectSort.addEventListener('change', render);
   render();
 }
