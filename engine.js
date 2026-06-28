@@ -69,28 +69,21 @@ async function getFinancialMonthForDate(date) {
  * puis additionne uniquement les mouvements STRICTEMENT postérieurs.
  * Retourne null si le compte n'a aucun historique (pas de report à créer).
  */
-async function getAccountBalanceBeforeDate(account, salaryDate) {
+async function getAccountBalanceBeforeDate(account, previousFinancialMonth) {
+  // FIX COMPLET : le report = solde du mois financier précédent
+  // = somme de TOUS ses mouvements (report entrant + salaire + récurrents + manuels)
+  // C'est exactement ce que la page État affiche pour ce mois.
+  // Les approches précédentes (cumul depuis le dernier report, exclusion des salaires/récurrents)
+  // produisaient toutes des doubles comptages ou des omissions.
   const movements = await all(STORES.MOVEMENTS);
 
-  const accountMovements = movements
-    .filter(m => m.account === account && m.date < salaryDate)
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  if (!accountMovements.length) return null;
-
-  const lastReport = [...accountMovements]
-    .reverse()
-    .find(m => m.origin === 'SYSTEM' && m.category === 'report');
-
-  if (!lastReport) {
-    return accountMovements.reduce((sum, m) => sum + Number(m.amount || 0), 0);
-  }
-
-  const afterReport = accountMovements.filter(m => m.date > lastReport.date);
-  return afterReport.reduce(
-    (sum, m) => sum + Number(m.amount || 0),
-    Number(lastReport.amount || 0)
+  const fmMovements = movements.filter(
+    m => m.account === account && m.financialMonth === previousFinancialMonth
   );
+
+  if (!fmMovements.length) return null;
+
+  return fmMovements.reduce((sum, m) => sum + Number(m.amount || 0), 0);
 }
 
 async function hasCarryOverForMonth(account, financialMonth) {
@@ -114,6 +107,11 @@ async function hasCarryOverForMonth(account, financialMonth) {
  * pour éviter que le mois suivant repart d'un cumul complet.
  */
 async function createBalanceCarryOver(newFinancialMonth, salaryDate) {
+  // Le mois financier précédent = celui qui précède newFinancialMonth
+  const [y, m] = newFinancialMonth.split('-').map(Number);
+  const prevDate = new Date(y, m - 2, 1); // m-2 car mois JS est 0-indexé
+  const previousFinancialMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+
   const accounts = ['perso', 'internet', 'commun', 'cash'];
   const toInsert = [];
 
@@ -121,7 +119,7 @@ async function createBalanceCarryOver(newFinancialMonth, salaryDate) {
     const alreadyExists = await hasCarryOverForMonth(acc, newFinancialMonth);
     if (alreadyExists) continue;
 
-    const balance = await getAccountBalanceBeforeDate(acc, salaryDate);
+    const balance = await getAccountBalanceBeforeDate(acc, previousFinancialMonth);
     if (balance === null) continue; // compte vierge, pas de report
 
     toInsert.push({
